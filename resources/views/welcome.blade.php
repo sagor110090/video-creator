@@ -25,10 +25,20 @@
                 <label class="block text-gray-700 text-sm font-bold mb-2">Your Story</label>
                 <textarea v-model="newStory.content" rows="4" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter your story here... (at least 10 characters)"></textarea>
             </div>
-            <button @click="submitStory" :disabled="loading" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition duration-200 disabled:opacity-50">
-                <span v-if="loading">Processing...</span>
-                <span v-else>Generate Video</span>
-            </button>
+            <div class="flex space-x-4">
+                <button @click="submitStory" :disabled="loading || generating" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition duration-200 disabled:opacity-50">
+                    <span v-if="loading">Processing...</span>
+                    <span v-else>Generate Video</span>
+                </button>
+                <button @click="generateStory" :disabled="loading || generating" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-lg transition duration-200 disabled:opacity-50 flex items-center">
+                    <svg v-if="generating" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span v-if="generating">AI is Writing...</span>
+                    <span v-else>AI: Generate Story</span>
+                </button>
+            </div>
         </div>
 
         <div v-if="stories.length > 0">
@@ -99,6 +109,7 @@
             setup() {
                 const stories = ref([]);
                 const loading = ref(false);
+                const generating = ref(false);
                 const newStory = ref({
                     title: '',
                     content: ''
@@ -110,6 +121,22 @@
                         stories.value = response.data;
                     } catch (error) {
                         console.error('Error fetching stories:', error);
+                    }
+                };
+
+                const generateStory = async () => {
+                    generating.value = true;
+                    try {
+                        const response = await axios.post('/api/stories/generate', {
+                            topic: newStory.value.title
+                        });
+                        newStory.value.title = response.data.title;
+                        newStory.value.content = response.data.content;
+                    } catch (error) {
+                        console.error('Error generating story:', error);
+                        alert('Failed to generate story with AI');
+                    } finally {
+                        generating.value = false;
                     }
                 };
 
@@ -162,6 +189,8 @@
                     stories,
                     newStory,
                     loading,
+                    generating,
+                    generateStory,
                     submitStory,
                     formatDate,
                     statusClass,

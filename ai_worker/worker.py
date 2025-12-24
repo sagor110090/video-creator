@@ -70,32 +70,45 @@ def generate_mock_image(output_path, text):
             f.write("mock image content")
 
 def generate_tts_audio(output_path, text):
-    """Generates audio using macOS 'say' command."""
-    temp_aiff = output_path.replace('.mp3', '.aiff')
+    """Generates human-like audio using Microsoft Edge TTS."""
+    # Path to the edge-tts executable in our venv
+    edge_tts_path = os.path.join(os.path.dirname(__file__), 'venv', 'bin', 'edge-tts')
 
-    # 1. Use macOS 'say' command to generate AI voice
-    say_command = ['say', text, '-o', temp_aiff]
-    if not run_command(say_command):
-        # Fallback to silent audio if 'say' fails
-        print(f"Warning: 'say' command failed. Falling back to silence.", file=sys.stderr)
-        command = [
-            FFMPEG_PATH, '-y', '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',
-            '-t', '5', output_path
-        ]
-        run_command(command)
-        return
+    # We'll use a high-quality neural voice
+    # en-US-AndrewNeural is a very natural male voice
+    # en-US-AvaNeural is also great
+    voice = "en-US-AndrewNeural"
 
-    # 2. Convert AIFF to MP3 using FFmpeg
-    convert_command = [
-        FFMPEG_PATH, '-y', '-i', temp_aiff,
-        '-codec:a', 'libmp3lame', '-qscale:a', '2',
-        output_path
+    command = [
+        edge_tts_path,
+        '--text', text,
+        '--write-media', output_path,
+        '--voice', voice
     ]
-    run_command(convert_command)
 
-    # 3. Clean up temp file
-    if os.path.exists(temp_aiff):
-        os.remove(temp_aiff)
+    print(f"DEBUG: Generating human-like voice with edge-tts: {voice}", file=sys.stderr)
+
+    if not run_command(command):
+        # Fallback to macOS 'say' if edge-tts fails
+        print(f"Warning: edge-tts failed. Falling back to macOS 'say'.", file=sys.stderr)
+        temp_aiff = output_path.replace('.mp3', '.aiff')
+        say_command = ['say', text, '-o', temp_aiff]
+        if run_command(say_command):
+            convert_command = [
+                FFMPEG_PATH, '-y', '-i', temp_aiff,
+                '-codec:a', 'libmp3lame', '-qscale:a', '2',
+                output_path
+            ]
+            run_command(convert_command)
+            if os.path.exists(temp_aiff):
+                os.remove(temp_aiff)
+        else:
+            # Final fallback to silence
+            command_silence = [
+                FFMPEG_PATH, '-y', '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',
+                '-t', '5', output_path
+            ]
+            run_command(command_silence)
 
 def create_scene_video(image_path, audio_path, output_path, narration, scene_index=0):
     # Get audio duration to match video length
@@ -161,21 +174,40 @@ def step3_video_generation(img_path, aud_path, vid_path, narration, scene_index)
     """Generates visual content and creates the scene video."""
     return create_scene_video(img_path, aud_path, vid_path, narration, scene_index)
 
-def step4_automatic_assembly(output_dir, scene_videos):
-    """Stitches all scenes into one final .mp4."""
+def step4_automatic_assembly(output_dir, scene_videos, background_music=None):
+    """Stitches all scenes into one final .mp4 and adds background music."""
     final_video_path = os.path.join(output_dir, "final_video.mp4")
     concat_file_path = os.path.join(output_dir, "concat.txt")
+    temp_video_path = os.path.join(output_dir, "temp_merged.mp4")
 
     with open(concat_file_path, 'w') as f:
         for vid in scene_videos:
             f.write(f"file '{os.path.abspath(vid)}'\n")
 
+    # Step 4.1: Merge all scene videos
     merge_command = [
         FFMPEG_PATH, '-y', '-f', 'concat', '-safe', '0', '-i', concat_file_path,
-        '-c', 'copy', final_video_path
+        '-c', 'copy', temp_video_path
     ]
     if not run_command(merge_command):
         return None
+
+    # Step 4.2: Add background music if provided
+    if background_music and os.path.exists(background_music):
+        # -stream_loop -1 loops the background music
+        # -filter_complex mixes audio: [1:a]volume=0.2 lowers background music, [0:a] is narration
+        music_mix_command = [
+            FFMPEG_PATH, '-y', '-i', temp_video_path, '-stream_loop', '-1', '-i', background_music,
+            '-filter_complex', "[1:a]volume=0.15[bg];[0:a][bg]amix=inputs=2:duration=first[a]",
+            '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-shortest', final_video_path
+        ]
+        if run_command(music_mix_command):
+            if os.path.exists(temp_video_path):
+                os.remove(temp_video_path)
+            return final_video_path
+
+    # Fallback to just the merged video if no music or command fails
+    os.rename(temp_video_path, final_video_path)
     return final_video_path
 
 def main():
@@ -213,7 +245,12 @@ def main():
 
     # 4. Step 4: Automatic Assembly
     print(f"DEBUG: Assembling final video...", file=sys.stderr)
-    final_video = step4_automatic_assembly(output_dir, scene_videos)
+
+    # Check for background music in public/audio/background.mp3
+    # We assume the script is run from the project root
+    bg_music_path = os.path.join(os.getcwd(), 'public', 'audio', 'background.mp3')
+
+    final_video = step4_automatic_assembly(output_dir, scene_videos, bg_music_path)
 
     if final_video:
         print(json.dumps({
