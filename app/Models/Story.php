@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Story extends Model
 {
-    protected $fillable = ['title', 'content', 'status', 'video_path'];
+    protected $fillable = ['title', 'content', 'status', 'video_path', 'aspect_ratio'];
 
     public function scenes()
     {

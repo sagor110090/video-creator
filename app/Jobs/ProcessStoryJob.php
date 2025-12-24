@@ -55,15 +55,15 @@ class ProcessStoryJob implements ShouldQueue
     {
         // Normalize text
         $content = str_replace(["\r", "\n"], " ", $content);
-        
+
         // Split into sentences (Story Parser logic)
         $sentences = preg_split('/(?<=[.!?])\s+/', $content, -1, PREG_SPLIT_NO_EMPTY);
-        
+
         $storyboard = [];
         foreach ($sentences as $sentence) {
             $sentence = trim($sentence);
-            if (strlen($sentence) < 10) continue; 
-            
+            if (strlen($sentence) < 10) continue;
+
             $storyboard[] = [
                 'narration' => $sentence,
                 'image_prompt' => "Cinematic storybook illustration of: " . $sentence,
@@ -90,6 +90,7 @@ class ProcessStoryJob implements ShouldQueue
         $inputData = [
             'story_id' => $this->story->id,
             'scenes' => $scenes,
+            'aspect_ratio' => $this->story->aspect_ratio ?? '16:9',
             'output_dir' => storage_path("app/public/videos/{$this->story->id}"),
         ];
 
@@ -98,7 +99,7 @@ class ProcessStoryJob implements ShouldQueue
         }
 
         $jsonInput = json_encode($inputData);
-        $pythonPath = '/opt/homebrew/bin/python3';
+        $pythonPath = base_path('ai_worker/venv/bin/python3');
         $pythonScript = base_path('ai_worker/worker.py');
 
         $process = new Process([$pythonPath, $pythonScript, $jsonInput]);

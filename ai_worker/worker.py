@@ -5,6 +5,7 @@ import subprocess
 import urllib.request
 import urllib.parse
 import time
+import re
 
 # Set the absolute path to ffmpeg
 FFMPEG_PATH = '/opt/homebrew/bin/ffmpeg'
@@ -25,12 +26,14 @@ def run_command(command):
         print(f"Warning: Command '{command[0]}' not found. Mocking output...", file=sys.stderr)
         return False
 
-def generate_ai_image(output_path, prompt):
+def generate_ai_image(output_path, prompt, aspect_ratio='16:9'):
     """Generates an AI image using Pollinations.ai or a fallback."""
+    width, height = (1280, 720) if aspect_ratio == '16:9' else (720, 1280)
+
     # 1. Try Pollinations.ai
     try:
         encoded_prompt = urllib.parse.quote(prompt)
-        url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1280&height=720&nologo=true&seed={int(time.time())}"
+        url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={width}&height={height}&nologo=true&seed={int(time.time())}"
         print(f"DEBUG: Fetching AI image from {url}", file=sys.stderr)
 
         headers = {'User-Agent': 'Mozilla/5.0'}
@@ -45,7 +48,7 @@ def generate_ai_image(output_path, prompt):
 
     # 2. Try Picsum as a generic fallback
     try:
-        url = f"https://picsum.photos/1280/720?sig={int(time.time())}"
+        url = f"https://picsum.photos/{width}/{height}?sig={int(time.time())}"
         headers = {'User-Agent': 'Mozilla/5.0'}
         req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=10) as response:
@@ -56,11 +59,12 @@ def generate_ai_image(output_path, prompt):
         print(f"Warning: Picsum failed: {e}. Falling back to mock.", file=sys.stderr)
         return False
 
-def generate_mock_image(output_path, text):
+def generate_mock_image(output_path, text, aspect_ratio='16:9'):
     # Sanitize text for FFmpeg drawtext filter
+    width, height = (1280, 720) if aspect_ratio == '16:9' else (720, 1280)
     safe_text = text.replace("'", "").replace(":", "").replace("\\", "")
     command = [
-        FFMPEG_PATH, '-y', '-f', 'lavfi', '-i', 'color=c=blue:s=1280x720:d=1',
+        FFMPEG_PATH, '-y', '-f', 'lavfi', '-i', f'color=c=blue:s={width}x{height}:d=1',
         '-vf', f"drawtext=text='{safe_text}':fontcolor=white:fontsize=40:x=(w-text_w)/2:y=(h-text_h)/2",
         '-frames:v', '1', output_path
     ]
@@ -110,8 +114,10 @@ def generate_tts_audio(output_path, text):
             ]
             run_command(command_silence)
 
-def create_scene_video(image_path, audio_path, output_path, narration, scene_index=0):
+def create_scene_video(image_path, audio_path, output_path, narration, scene_index=0, aspect_ratio='16:9'):
     # Get audio duration to match video length
+    width, height = (1280, 720) if aspect_ratio == '16:9' else (720, 1280)
+
     command_duration = [
         'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
         '-of', 'default=noprint_wrappers=1:nokey=1', audio_path
@@ -140,39 +146,86 @@ def create_scene_video(image_path, audio_path, output_path, narration, scene_ind
         # Zoom out (start at 1.5 and go down)
         zoom_expr = "max(1.5-0.0015*on,1.0)"
 
-    # Subtitles logic: split long text into lines
+    # Subtitles logic: split long text into lines based on aspect ratio
+    line_limit = 25 if aspect_ratio == '9:16' else 45
     words = narration.split()
     lines = []
     current_line = []
     for word in words:
         current_line.append(word)
-        if len(" ".join(current_line)) > 40:
+        if len(" ".join(current_line)) > line_limit:
             lines.append(" ".join(current_line))
             current_line = []
     if current_line:
         lines.append(" ".join(current_line))
 
-    safe_narration = "\\\n".join(lines).replace("'", "").replace(":", "")
+    # Sanitize narration and write to a temporary file for FFmpeg to read
+    # We use a strict regex to keep ONLY letters, numbers, and spaces.
+    # This is the most aggressive fix to remove invisible control characters or trailing markers.
+    clean_lines = []
+    for line in lines:
+        # Keep only alphanumeric and basic spaces, then strip trailing/leading whitespace
+        clean_line = re.sub(r'[^a-zA-Z0-9\s]', '', line).strip()
+        if clean_line:
+            clean_lines.append(clean_line)
 
-    # Drawtext filter for subtitles: white text with black border at bottom
-    subtitles_filter = f"drawtext=text='{safe_narration}':fontcolor=white:fontsize=36:borderw=2:bordercolor=black:x=(w-text_w)/2:y=h-80"
+    text_file_path = output_path + ".txt"
+    # Write as simple ASCII, ignoring any character that can't be represented
+    with open(text_file_path, 'w', encoding='ascii', errors='ignore') as f:
+        f.write("\n".join(clean_lines))
 
+    # Adjust font size and position for vertical videos (Shorts/TikTok)
+    font_size = 36 if aspect_ratio == '16:9' else 42
+    y_pos = "h-120" if aspect_ratio == '16:9' else "h-300" # Higher for shorts to avoid UI
+
+    # Cross-platform font detection
+    # We look for common high-quality fonts on both macOS and Linux
+    possible_fonts = [
+        "/System/Library/Fonts/Helvetica.ttc",          # macOS
+        "/System/Library/Fonts/Cache/Arial.ttf",       # macOS alternative
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", # Linux (Ubuntu/Debian)
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",         # Linux (Arch/CentOS)
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", # Linux alternative
+        "Arial", # Fallback to system font name if path fails
+    ]
+
+    font_path = "Arial" # Default fallback
+    for path in possible_fonts:
+        if os.path.exists(path):
+            font_path = path
+            break
+
+    # Drawtext filter using the textfile parameter and an explicit font
+    # Simplified filter: white text with black border and shadow
+    subtitles_filter = (
+        f"drawtext=textfile='{text_file_path}':fontfile='{font_path}':"
+        f"fontcolor=white:fontsize={font_size}:borderw=1:bordercolor=black:"
+        f"shadowcolor=black@0.5:shadowx=2:shadowy=2:"
+        f"x=(w-text_w)/2:y={y_pos}"
+    )
+
+    # Pre-scale image to match target resolution and ensure it's compatible with zoompan
+    # zoompan is very sensitive to input resolution
     command = [
         FFMPEG_PATH, '-y', '-loop', '1', '-i', image_path, '-i', audio_path,
-        '-vf', f"zoompan=z='{zoom_expr}':d={total_frames}:s=1280x720,{subtitles_filter},format=yuv420p",
+        '-vf', f"scale={width}:{height},zoompan=z='{zoom_expr}':d={total_frames}:s={width}x{height},{subtitles_filter},format=yuv420p",
         '-c:v', 'libx264', '-t', str(duration), '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', output_path
     ]
     if not run_command(command):
         with open(output_path, 'w') as f:
             f.write("mock video content")
 
+    # Clean up the temporary subtitle file
+    if os.path.exists(text_file_path):
+        os.remove(text_file_path)
+
 def step2_voice_generation(output_path, text):
     """Generates AI voice for the scene."""
     return generate_tts_audio(output_path, text)
 
-def step3_video_generation(img_path, aud_path, vid_path, narration, scene_index):
+def step3_video_generation(img_path, aud_path, vid_path, narration, scene_index, aspect_ratio='16:9'):
     """Generates visual content and creates the scene video."""
-    return create_scene_video(img_path, aud_path, vid_path, narration, scene_index)
+    return create_scene_video(img_path, aud_path, vid_path, narration, scene_index, aspect_ratio)
 
 def step4_automatic_assembly(output_dir, scene_videos, background_music=None):
     """Stitches all scenes into one final .mp4 and adds background music."""
@@ -219,11 +272,12 @@ def main():
     story_id = data['story_id']
     scenes = data['scenes']
     output_dir = data['output_dir']
+    aspect_ratio = data.get('aspect_ratio', '16:9')
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    print(f"DEBUG: Processing story {story_id} with {len(scenes)} scenes", file=sys.stderr)
+    print(f"DEBUG: Processing story {story_id} with {len(scenes)} scenes in {aspect_ratio}", file=sys.stderr)
     scene_videos = []
 
     for i, scene in enumerate(scenes):
@@ -233,14 +287,14 @@ def main():
         vid_path = os.path.join(output_dir, f"scene_{i}_vid.mp4")
 
         # 1. Generate Image (Part of Step 3 Visuals)
-        if not generate_ai_image(img_path, scene['image_prompt']):
-            generate_mock_image(img_path, scene['image_prompt'][:50] + "...")
+        if not generate_ai_image(img_path, scene['image_prompt'], aspect_ratio):
+            generate_mock_image(img_path, scene['image_prompt'][:50] + "...", aspect_ratio)
 
         # 2. Step 2: Voice Generation
         step2_voice_generation(aud_path, scene['narration'])
 
         # 3. Step 3: Video Generation (Scene creation)
-        step3_video_generation(img_path, aud_path, vid_path, scene['narration'], i)
+        step3_video_generation(img_path, aud_path, vid_path, scene['narration'], i, aspect_ratio)
         scene_videos.append(vid_path)
 
     # 4. Step 4: Automatic Assembly

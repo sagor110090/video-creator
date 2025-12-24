@@ -18,6 +18,19 @@
         <div class="bg-white rounded-lg shadow-md p-6 mb-8">
             <h2 class="text-xl font-semibold mb-4">Create New Story</h2>
             <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2">Video Format</label>
+                <div class="flex space-x-4">
+                    <label class="flex items-center cursor-pointer">
+                        <input type="radio" v-model="newStory.aspect_ratio" value="16:9" class="mr-2">
+                        <span class="text-gray-700">Landscape (16:9)</span>
+                    </label>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="radio" v-model="newStory.aspect_ratio" value="9:16" class="mr-2">
+                        <span class="text-gray-700 font-bold text-blue-600">Shorts (9:16)</span>
+                    </label>
+                </div>
+            </div>
+            <div class="mb-4">
                 <label class="block text-gray-700 text-sm font-bold mb-2">Title (Optional)</label>
                 <input v-model="newStory.title" type="text" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="A Day at the Beach">
             </div>
@@ -58,7 +71,7 @@
                     <p class="text-gray-700 mb-4 italic">"[[ truncate(story.content) ]]"</p>
 
                     <div v-if="story.status === 'completed' && story.video_path" class="mt-4">
-                        <video controls class="w-full rounded-lg shadow-inner bg-black aspect-video">
+                        <video controls :class="story.aspect_ratio === '9:16' ? 'max-w-xs mx-auto aspect-[9/16]' : 'w-full aspect-video'" class="rounded-lg shadow-inner bg-black">
                             <source :src="'/storage/' + story.video_path" type="video/mp4">
                             Your browser does not support the video tag.
                         </video>
@@ -112,7 +125,8 @@
                 const generating = ref(false);
                 const newStory = ref({
                     title: '',
-                    content: ''
+                    content: '',
+                    aspect_ratio: '16:9'
                 });
 
                 const fetchStories = async () => {
@@ -149,7 +163,7 @@
                     loading.value = true;
                     try {
                         await axios.post('/api/stories', newStory.value);
-                        newStory.value = { title: '', content: '' };
+                        newStory.value = { title: '', content: '', aspect_ratio: '16:9' };
                         fetchStories();
                         // Poll for updates every 5 seconds
                         const poll = setInterval(async () => {

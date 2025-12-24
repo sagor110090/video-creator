@@ -33,12 +33,14 @@ class StoryController extends Controller
         $request->validate([
             'content' => 'required|string|min:10',
             'title' => 'nullable|string|max:255',
+            'aspect_ratio' => 'nullable|string|in:16:9,9:16',
         ]);
 
         $story = Story::create([
             'title' => $request->title ?? 'Untitled Story',
             'content' => $request->content,
             'status' => 'pending',
+            'aspect_ratio' => $request->aspect_ratio ?? '16:9',
         ]);
 
         ProcessStoryJob::dispatch($story);
