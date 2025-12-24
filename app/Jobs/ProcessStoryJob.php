@@ -7,6 +7,7 @@ use Illuminate\Foundation\Queue\Queueable;
 
 use App\Models\Story;
 use App\Models\Scene;
+use App\Jobs\UploadToYouTubeJob;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\Process\Process;
@@ -103,7 +104,7 @@ class ProcessStoryJob implements ShouldQueue
         $pythonScript = base_path('ai_worker/worker.py');
 
         $process = new Process([$pythonPath, $pythonScript, $jsonInput]);
-        $process->setTimeout(600); // 10 minutes
+        $process->setTimeout(1800); // 30 minutes
         $process->run();
 
         Log::info('AI Worker Output: ' . $process->getOutput());

@@ -43,4 +43,10 @@ return [
         'api_key' => env('DEEPSEEK_API_KEY'),
     ],
 
+    'youtube' => [
+        'client_id' => env('YOUTUBE_CLIENT_ID'),
+        'client_secret' => env('YOUTUBE_CLIENT_SECRET'),
+        'redirect_uri' => 'https://ec00ea0fce4f.ngrok-free.app/youtube/callback',
+    ],
+
 ];
