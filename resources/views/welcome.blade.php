@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Video Storyteller</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div id="app" class="container mx-auto px-4 py-8 max-w-4xl">
+        <header class="text-center mb-12">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">AI Video Storyteller</h1>
+            <p class="text-gray-600">Turn your stories into animated videos instantly</p>
+        </header>
+
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4">Create New Story</h2>
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2">Title (Optional)</label>
+                <input v-model="newStory.title" type="text" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="A Day at the Beach">
+            </div>
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2">Your Story</label>
+                <textarea v-model="newStory.content" rows="4" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter your story here... (at least 10 characters)"></textarea>
+            </div>
+            <button @click="submitStory" :disabled="loading" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition duration-200 disabled:opacity-50">
+                <span v-if="loading">Processing...</span>
+                <span v-else>Generate Video</span>
+            </button>
+        </div>
+
+        <div v-if="stories.length > 0">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Your Stories</h2>
+            <div class="grid gap-6">
+                <div v-for="story in stories" :key="story.id" class="bg-white rounded-lg shadow-md p-6">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-800">[[ story.title ]]</h3>
+                            <p class="text-sm text-gray-500">Created [[ formatDate(story.created_at) ]]</p>
+                        </div>
+                        <span :class="statusClass(story.status)" class="px-3 py-1 rounded-full text-xs font-semibold uppercase">
+                            [[ story.status ]]
+                        </span>
+                    </div>
+
+                    <p class="text-gray-700 mb-4 italic">"[[ truncate(story.content) ]]"</p>
+
+                    <div v-if="story.status === 'completed' && story.video_path" class="mt-4">
+                        <video controls class="w-full rounded-lg shadow-inner bg-black aspect-video">
+                            <source :src="'/storage/' + story.video_path" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                        <div class="mt-4">
+                            <a :href="'/storage/' + story.video_path" download class="inline-block bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded transition duration-200">
+                                Download Video
+                            </a>
+                        </div>
+                    </div>
+
+                    <div v-if="story.status === 'processing'" class="mt-4 p-4 bg-blue-50 text-blue-700 rounded-lg animate-pulse">
+                        Generating your video... this might take a minute.
+                    </div>
+
+                    <div v-if="story.status === 'failed'" class="mt-4 p-4 bg-red-50 text-red-700 rounded-lg">
+                        Failed to generate video. Please try again.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+
+        createApp({
+            delimiters: ['[[', ']]'],
+            setup() {
+                const stories = ref([]);
+                const loading = ref(false);
+                const newStory = ref({
+                    title: '',
+                    content: ''
+                });
+
+                const fetchStories = async () => {
+                    try {
+                        const response = await axios.get('/api/stories');
+                        stories.value = response.data;
+                    } catch (error) {
+                        console.error('Error fetching stories:', error);
+                    }
+                };
+
+                const submitStory = async () => {
+                    if (newStory.value.content.length < 10) {
+                        alert('Story content must be at least 10 characters');
+                        return;
+                    }
+
+                    loading.value = true;
+                    try {
+                        await axios.post('/api/stories', newStory.value);
+                        newStory.value = { title: '', content: '' };
+                        fetchStories();
+                        // Poll for updates every 5 seconds
+                        const poll = setInterval(async () => {
+                            await fetchStories();
+                            const processing = stories.value.some(s => s.status === 'processing' || s.status === 'pending');
+                            if (!processing) clearInterval(poll);
+                        }, 5000);
+                    } catch (error) {
+                        console.error('Error submitting story:', error);
+                        alert('Failed to submit story');
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                const formatDate = (dateString) => {
+                    return new Date(dateString).toLocaleString();
+                };
+
+                const statusClass = (status) => {
+                    switch (status) {
+                        case 'completed': return 'bg-green-100 text-green-800';
+                        case 'processing': return 'bg-blue-100 text-blue-800';
+                        case 'pending': return 'bg-yellow-100 text-yellow-800';
+                        case 'failed': return 'bg-red-100 text-red-800';
+                        default: return 'bg-gray-100 text-gray-800';
+                    }
+                };
+
+                const truncate = (text) => {
+                    return text.length > 150 ? text.substring(0, 150) + '...' : text;
+                };
+
+                onMounted(fetchStories);
+
+                return {
+                    stories,
+                    newStory,
+                    loading,
+                    submitStory,
+                    formatDate,
+                    statusClass,
+                    truncate
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
