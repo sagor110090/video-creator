@@ -23,21 +23,22 @@ class ProcessStoryJob implements ShouldQueue
         try {
             $this->story->update(['status' => 'processing']);
 
-            // 1. Mock LLM: Split story into 6 scenes
-            $scenesData = $this->generateScenesMock($this->story->content);
+            // STEP 1: Story Parser (Storyboard Creation)
+            Log::info("STEP 1: Parsing story into storyboard for Story ID: {$this->story->id}");
+            $storyboard = $this->parseStory($this->story->content);
 
-            foreach ($scenesData as $index => $data) {
+            foreach ($storyboard as $index => $scene) {
                 $this->story->scenes()->create([
                     'order' => $index,
-                    'narration' => $data['narration'],
-                    'image_prompt' => $data['image_prompt'],
+                    'narration' => $scene['narration'],
+                    'image_prompt' => $scene['image_prompt'],
                 ]);
             }
 
-            // 2. Call Python Worker
-            Log::info('Starting video processing for Story ID: ' . $this->story->id);
-            $this->processVideo();
-            Log::info('Finished video processing for Story ID: ' . $this->story->id);
+            // STEPS 2, 3, & 4: Voice, Video, and Assembly (via Python Worker)
+            Log::info("STEPS 2-4: Starting AI generation and assembly for Story ID: {$this->story->id}");
+            $this->runAiWorker();
+            Log::info("Workflow completed for Story ID: {$this->story->id}");
 
             $this->story->update(['status' => 'completed']);
         } catch (\Exception $e) {
@@ -46,31 +47,37 @@ class ProcessStoryJob implements ShouldQueue
         }
     }
 
-    private function generateScenesMock($content)
+    /**
+     * Step 1: Story Parser
+     * Breaks the story into a "Storyboard" (Scene 1, Scene 2, etc.)
+     */
+    private function parseStory($content)
     {
-        // First, normalize the text: replace newlines with spaces to handle blocks of text
+        // Normalize text
         $content = str_replace(["\r", "\n"], " ", $content);
-
-        // Use a more robust regex to split into sentences
-        // This splits by . ! or ? followed by a space OR end of string
+        
+        // Split into sentences (Story Parser logic)
         $sentences = preg_split('/(?<=[.!?])\s+/', $content, -1, PREG_SPLIT_NO_EMPTY);
-
-        $scenes = [];
+        
+        $storyboard = [];
         foreach ($sentences as $sentence) {
             $sentence = trim($sentence);
-            if (strlen($sentence) < 10) continue; // Skip very short fragments
-
-            $scenes[] = [
+            if (strlen($sentence) < 10) continue; 
+            
+            $storyboard[] = [
                 'narration' => $sentence,
                 'image_prompt' => "Cinematic storybook illustration of: " . $sentence,
             ];
         }
 
-        // Return all scenes, up to 50 for safety
-        return array_slice($scenes, 0, 50);
+        return array_slice($storyboard, 0, 50);
     }
 
-    private function processVideo()
+    /**
+     * Steps 2-4: Automatic AI Generation & Assembly
+     * Calls the Python worker to handle Voice, Video, and stitching.
+     */
+    private function runAiWorker()
     {
         $scenes = $this->story->scenes()->get()->map(function($scene) {
             return [
@@ -98,8 +105,10 @@ class ProcessStoryJob implements ShouldQueue
         $process->setTimeout(600); // 10 minutes
         $process->run();
 
-        Log::info('Python Worker Output: ' . $process->getOutput());
-        Log::info('Python Worker Error: ' . $process->getErrorOutput());
+        Log::info('AI Worker Output: ' . $process->getOutput());
+        if ($process->getErrorOutput()) {
+            Log::debug('AI Worker Debug/Error: ' . $process->getErrorOutput());
+        }
 
         if (!$process->isSuccessful()) {
             throw new ProcessFailedException($process);

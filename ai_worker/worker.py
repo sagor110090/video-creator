@@ -153,6 +153,31 @@ def create_scene_video(image_path, audio_path, output_path, narration, scene_ind
         with open(output_path, 'w') as f:
             f.write("mock video content")
 
+def step2_voice_generation(output_path, text):
+    """Generates AI voice for the scene."""
+    return generate_tts_audio(output_path, text)
+
+def step3_video_generation(img_path, aud_path, vid_path, narration, scene_index):
+    """Generates visual content and creates the scene video."""
+    return create_scene_video(img_path, aud_path, vid_path, narration, scene_index)
+
+def step4_automatic_assembly(output_dir, scene_videos):
+    """Stitches all scenes into one final .mp4."""
+    final_video_path = os.path.join(output_dir, "final_video.mp4")
+    concat_file_path = os.path.join(output_dir, "concat.txt")
+
+    with open(concat_file_path, 'w') as f:
+        for vid in scene_videos:
+            f.write(f"file '{os.path.abspath(vid)}'\n")
+
+    merge_command = [
+        FFMPEG_PATH, '-y', '-f', 'concat', '-safe', '0', '-i', concat_file_path,
+        '-c', 'copy', final_video_path
+    ]
+    if not run_command(merge_command):
+        return None
+    return final_video_path
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: python worker.py <json_input>")
@@ -167,50 +192,39 @@ def main():
         os.makedirs(output_dir)
 
     print(f"DEBUG: Processing story {story_id} with {len(scenes)} scenes", file=sys.stderr)
-    sys.stderr.flush()
     scene_videos = []
 
     for i, scene in enumerate(scenes):
         print(f"DEBUG: Processing scene {i}", file=sys.stderr)
-        sys.stderr.flush()
         img_path = os.path.join(output_dir, f"scene_{i}_img.jpg")
         aud_path = os.path.join(output_dir, f"scene_{i}_aud.mp3")
         vid_path = os.path.join(output_dir, f"scene_{i}_vid.mp4")
 
-        # 1. Generate Image (Try AI first, then mock)
+        # 1. Generate Image (Part of Step 3 Visuals)
         if not generate_ai_image(img_path, scene['image_prompt']):
             generate_mock_image(img_path, scene['image_prompt'][:50] + "...")
 
-        # 2. Generate AI Voice (TTS)
-        generate_tts_audio(aud_path, scene['narration'])
+        # 2. Step 2: Voice Generation
+        step2_voice_generation(aud_path, scene['narration'])
 
-        # 3. Create video for this scene with subtitles and zoom
-        create_scene_video(img_path, aud_path, vid_path, scene['narration'], scene_index=i)
+        # 3. Step 3: Video Generation (Scene creation)
+        step3_video_generation(img_path, aud_path, vid_path, scene['narration'], i)
         scene_videos.append(vid_path)
 
-    print(f"DEBUG: Finished all scenes, merging...", file=sys.stderr)
-    sys.stderr.flush()
-    # Merge all scenes
-    final_video_path = os.path.join(output_dir, "final_video.mp4")
+    # 4. Step 4: Automatic Assembly
+    print(f"DEBUG: Assembling final video...", file=sys.stderr)
+    final_video = step4_automatic_assembly(output_dir, scene_videos)
 
-    # Create a concat file for FFmpeg
-    concat_file_path = os.path.join(output_dir, "concat.txt")
-    with open(concat_file_path, 'w') as f:
-        for vid in scene_videos:
-            f.write(f"file '{os.path.abspath(vid)}'\n")
-
-    merge_command = [
-        FFMPEG_PATH, '-y', '-f', 'concat', '-safe', '0', '-i', concat_file_path,
-        '-c', 'copy', final_video_path
-    ]
-    if not run_command(merge_command):
-        with open(final_video_path, 'w') as f:
-            f.write("mock final video content")
-
-    print(json.dumps({
-        "status": "success",
-        "video_path": final_video_path
-    }))
+    if final_video:
+        print(json.dumps({
+            "status": "success",
+            "video_path": final_video
+        }))
+    else:
+        print(json.dumps({
+            "status": "error",
+            "message": "Assembly failed"
+        }))
 
 if __name__ == "__main__":
     main()

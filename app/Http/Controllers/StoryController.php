@@ -10,7 +10,7 @@ class StoryController extends Controller
 {
     public function index()
     {
-        return Story::latest()->get();
+        return Story::withCount('scenes')->latest()->get();
     }
 
     public function store(Request $request)
