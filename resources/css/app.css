@@ -4,8 +4,34 @@
 @source '../../storage/framework/views/*.php';
 @source '../**/*.blade.php';
 @source '../**/*.js';
+@source '../**/*.vue';
 
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer utilities {
+    .animate-in {
+        animation-duration: 300ms;
+        animation-fill-mode: both;
+    }
+    .fade-in {
+        animation-name: fade-in;
+    }
+    .slide-in-from-top-4 {
+        --tw-enter-translate-y: -1rem;
+        animation-name: slide-in;
+    }
+
+    @keyframes fade-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+    @keyframes slide-in {
+        from { transform: translateY(var(--tw-enter-translate-y, 0)); }
+        to { transform: translateY(0); }
+    }
 }

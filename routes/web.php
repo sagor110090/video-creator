@@ -4,8 +4,10 @@ use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\YouTubeController;
 
+use Inertia\Inertia;
+
 Route::get('/', function () {
-    return view('welcome');
+    return Inertia::render('Welcome');
 });
 
 Route::get('/youtube/auth', [YouTubeController::class, 'auth'])->name('youtube.auth');

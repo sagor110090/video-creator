@@ -19,12 +19,14 @@ class StoryController extends Controller
     public function generate(Request $request, AiStoryService $aiService)
     {
         $request->validate([
+            'title' => 'nullable|string|max:255',
             'topic' => 'nullable|string|max:255',
             'style' => 'nullable|string|in:story,science_short,hollywood_hype,trade_wave',
         ]);
 
         try {
-            $storyData = $aiService->generateStory($request->topic, $request->style ?? 'story');
+            $topic = $request->title ?? $request->topic;
+            $storyData = $aiService->generateStory($topic, $request->style ?? 'story');
             return response()->json($storyData);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Failed to generate story: ' . $e->getMessage()], 500);
@@ -137,7 +139,7 @@ class StoryController extends Controller
 
     public function searchNews(Request $request)
     {
-        $query = $request->query('q');
+        $query = $request->input('query') ?? $request->query('q');
         if (!$query) {
             return response()->json([]);
         }
