@@ -13,3 +13,6 @@ Route::get('/stories/{story}', [StoryController::class, 'show']);
 Route::get('/stories', [StoryController::class, 'index']);
 Route::delete('/stories/{story}', [StoryController::class, 'destroy']);
 Route::post('/stories/{story}/regenerate', [StoryController::class, 'regenerate']);
+
+Route::get('/youtube/channels', [\App\Http\Controllers\YouTubeController::class, 'channels']);
+Route::delete('/youtube/channels/{id}', [\App\Http\Controllers\YouTubeController::class, 'disconnect']);

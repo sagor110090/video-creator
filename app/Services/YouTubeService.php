@@ -30,6 +30,7 @@ class YouTubeService
         $this->client->setClientSecret($clientSecret);
         $this->client->setRedirectUri($redirectUri);
         $this->client->addScope(YouTube::YOUTUBE_UPLOAD);
+        $this->client->addScope(YouTube::YOUTUBE_READONLY);
         $this->client->setAccessType('offline');
         $this->client->setPrompt('select_account consent');
     }
@@ -49,25 +50,25 @@ class YouTubeService
             throw new \Exception('Error fetching access token: ' . $accessToken['error_description']);
         }
 
-        YoutubeToken::updateOrCreate(
-            ['id' => 1], // Assuming single user for now
+        $this->client->setAccessToken($accessToken);
+        $youtube = new YouTube($this->client);
+        $channels = $youtube->channels->listChannels('snippet', ['mine' => true]);
+        $channel = $channels->getItems()[0] ?? null;
+
+        return YoutubeToken::updateOrCreate(
+            ['channel_id' => $channel?->getId()],
             [
+                'channel_title' => $channel?->getSnippet()?->getTitle(),
+                'channel_thumbnail' => $channel?->getSnippet()?->getThumbnails()?->getDefault()?->getUrl(),
                 'access_token' => json_encode($accessToken),
                 'refresh_token' => $accessToken['refresh_token'] ?? null,
                 'expires_at' => now()->addSeconds($accessToken['expires_in']),
             ]
         );
-
-        return $accessToken;
     }
 
-    private function refreshAccessTokenIfExpired()
+    private function refreshAccessTokenIfExpired(YoutubeToken $token)
     {
-        $token = YoutubeToken::first();
-        if (!$token) {
-            throw new \Exception('No YouTube token found. Please authenticate first.');
-        }
-
         $accessToken = json_decode($token->access_token, true);
         $this->client->setAccessToken($accessToken);
 
@@ -92,7 +93,17 @@ class YouTubeService
     public function uploadVideo(Story $story)
     {
         try {
-            $this->refreshAccessTokenIfExpired();
+            $token = $story->youtube_token_id
+                ? YoutubeToken::find($story->youtube_token_id)
+                : YoutubeToken::first();
+
+            if (!$token) {
+                throw new \Exception('No YouTube account connected. Please connect a channel first.');
+            }
+
+            Log::info("Attempting YouTube upload for Story ID: {$story->id} using channel: {$token->channel_title} (ID: {$token->channel_id})");
+
+            $this->refreshAccessTokenIfExpired($token);
 
             $youtube = new YouTube($this->client);
 
@@ -157,8 +168,27 @@ class YouTubeService
             return $status['id'];
 
         } catch (\Exception $e) {
-            Log::error('YouTube upload failed: ' . $e->getMessage());
-            $story->update(['youtube_upload_status' => 'failed']);
+            $errorMessage = $e->getMessage();
+
+            // Extract meaningful message from JSON error if possible
+            if (strpos($errorMessage, '{') !== false) {
+                $decoded = json_decode(substr($errorMessage, strpos($errorMessage, '{')), true);
+                if (isset($decoded['error']['message'])) {
+                    $errorMessage = $decoded['error']['message'];
+                }
+            }
+
+            Log::error("YouTube upload failed for {$token->channel_title}: " . $e->getMessage());
+
+            $finalError = $errorMessage;
+            if (strpos($errorMessage, 'uploadLimitExceeded') !== false || strpos($errorMessage, 'exceeded the number of videos') !== false) {
+                $finalError = "Upload limit reached for channel '{$token->channel_title}'. Try again in 24h or use another account.";
+            }
+
+            $story->update([
+                'youtube_upload_status' => 'failed',
+                'youtube_error' => $finalError
+            ]);
             throw $e;
         }
     }

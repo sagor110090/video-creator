@@ -17,11 +17,18 @@ class Story extends Model
         'youtube_tags',
         'youtube_video_id',
         'is_uploaded_to_youtube',
-        'youtube_upload_status'
+        'youtube_upload_status',
+        'youtube_token_id',
+        'youtube_error'
     ];
 
     public function scenes()
     {
         return $this->hasMany(Scene::class)->orderBy('order');
+    }
+
+    public function youtubeChannel()
+    {
+        return $this->belongsTo(YoutubeToken::class, 'youtube_token_id');
     }
 }

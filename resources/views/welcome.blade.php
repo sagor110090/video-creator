@@ -18,10 +18,15 @@
         <div class="bg-white rounded-lg shadow-md p-6 mb-8">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-semibold">Create New Story</h2>
-                <a href="{{ route('youtube.auth') }}" class="text-sm bg-red-600 hover:bg-red-700 text-white py-1 px-3 rounded flex items-center">
-                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-                    Auth YouTube
-                </a>
+                <div class="flex items-center space-x-2">
+                    <div v-if="channels.length > 0" class="flex -space-x-2 mr-2">
+                        <img v-for="channel in channels" :key="channel.id" :src="channel.channel_thumbnail" :title="channel.channel_title" class="w-8 h-8 rounded-full border-2 border-white cursor-help">
+                    </div>
+                    <a href="{{ route('youtube.auth') }}" class="text-sm bg-red-600 hover:bg-red-700 text-white py-1 px-3 rounded flex items-center">
+                        <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                        Add Channel
+                    </a>
+                </div>
             </div>
 
             <div class="mb-4">
@@ -67,6 +72,18 @@
                     <svg class="w-5 h-5 mr-2 text-red-600" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
                     YouTube Upload Settings
                 </h3>
+                <div v-if="channels.length > 0" class="mb-4">
+                    <label class="block text-gray-600 text-xs font-bold mb-2">Target Channel</label>
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+                        <div v-for="channel in channels" :key="channel.id"
+                             @click="newStory.youtube_token_id = channel.id"
+                             :class="['flex items-center p-2 border rounded-lg cursor-pointer transition',
+                                      newStory.youtube_token_id === channel.id ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:border-red-300']">
+                            <img :src="channel.channel_thumbnail" class="w-6 h-6 rounded-full mr-2">
+                            <span class="text-xs truncate" :title="channel.channel_title">[[ channel.channel_title ]]</span>
+                        </div>
+                    </div>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="mb-2">
                         <label class="block text-gray-600 text-xs font-bold mb-1">YouTube Title</label>
@@ -144,17 +161,24 @@
                                         @click="uploadToYouTube(story)"
                                         class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded transition duration-200 flex items-center">
                                     <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-                                    Upload to YouTube
+                                    Upload to <span class="ml-1 italic font-bold">[[ story.youtube_channel?.channel_title || 'YouTube' ]]</span>
                                 </button>
 
                                 <span v-if="story.youtube_upload_status === 'completed'" class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium flex items-center">
-                                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-                                    Uploaded
+                                    <img v-if="story.youtube_channel?.channel_thumbnail" :src="story.youtube_channel.channel_thumbnail" class="w-4 h-4 rounded-full mr-2">
+                                    Uploaded to [[ story.youtube_channel?.channel_title ]]
                                     <a :href="'https://youtube.com/watch?v=' + story.youtube_video_id" target="_blank" class="ml-2 underline">View</a>
                                 </span>
                                 <span v-else-if="story.youtube_upload_status === 'uploading'" class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-sm font-medium flex items-center">
                                     <svg class="animate-spin h-4 w-4 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                                     Uploading...
+                                </span>
+                                <span v-else-if="story.youtube_upload_status === 'failed'" class="bg-red-100 text-red-700 px-3 py-1 rounded-full text-sm font-medium flex flex-col items-start">
+                                    <div class="flex items-center">
+                                        <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg>
+                                        Upload Failed
+                                    </div>
+                                    <p v-if="story.youtube_error" class="text-[10px] mt-1 leading-tight max-w-xs">[[ story.youtube_error ]]</p>
                                 </span>
                             </div>
                         </div>
@@ -166,6 +190,25 @@
                                 YouTube Settings
                             </h4>
                             <div class="space-y-3">
+                                <div v-if="story.youtube_upload_status !== 'completed'">
+                                    <label class="block text-xs font-bold text-gray-500 uppercase">Target Channel</label>
+                                    <div class="flex flex-wrap gap-2 mt-1">
+                                        <div v-for="channel in channels" :key="channel.id"
+                                             @click="story.youtube_token_id = channel.id; story.youtube_channel = channel"
+                                             :class="['flex items-center p-1 border rounded cursor-pointer transition text-xs',
+                                                      story.youtube_token_id === channel.id ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:border-red-300']">
+                                            <img :src="channel.channel_thumbnail" class="w-4 h-4 rounded-full mr-1">
+                                            <span class="truncate max-w-[80px]">[[ channel.channel_title ]]</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div v-else class="flex items-center p-2 bg-blue-50 border border-blue-100 rounded">
+                                    <img :src="story.youtube_channel?.channel_thumbnail" class="w-6 h-6 rounded-full mr-2">
+                                    <div class="text-xs">
+                                        <p class="font-bold text-blue-800">Uploaded to Channel</p>
+                                        <p class="text-blue-600">[[ story.youtube_channel?.channel_title ]]</p>
+                                    </div>
+                                </div>
                                 <div>
                                     <label class="block text-xs font-bold text-gray-500 uppercase">Title</label>
                                     <input v-model="story.youtube_title" type="text" class="w-full px-2 py-1 text-sm border rounded focus:ring-1 focus:ring-blue-500 outline-none">
@@ -242,8 +285,10 @@
                     style: 'science_short',
                     youtube_title: '',
                     youtube_description: '',
-                    youtube_tags: ''
+                    youtube_tags: '',
+                    youtube_token_id: null
                 });
+                const channels = ref([]);
 
                 const fetchStories = async () => {
                     try {
@@ -251,6 +296,18 @@
                         stories.value = response.data;
                     } catch (error) {
                         console.error('Error fetching stories:', error);
+                    }
+                };
+
+                const fetchChannels = async () => {
+                    try {
+                        const response = await axios.get('/api/youtube/channels');
+                        channels.value = response.data;
+                        if (channels.value.length > 0 && !newStory.value.youtube_token_id) {
+                            newStory.value.youtube_token_id = channels.value[0].id;
+                        }
+                    } catch (error) {
+                        console.error('Error fetching channels:', error);
                     }
                 };
 
@@ -312,7 +369,8 @@
                         await axios.patch(`/api/stories/${story.id}`, {
                             youtube_title: story.youtube_title,
                             youtube_description: story.youtube_description,
-                            youtube_tags: story.youtube_tags
+                            youtube_tags: story.youtube_tags,
+                            youtube_token_id: story.youtube_token_id
                         });
                         alert('YouTube settings saved!');
                     } catch (error) {
@@ -322,22 +380,34 @@
                 };
 
                 const uploadToYouTube = async (story) => {
+                    if (!confirm(`Start uploading this video to ${story.youtube_channel?.channel_title || 'YouTube'}?`)) return;
+
                     try {
-                        const response = await axios.post(`/api/stories/${story.id}/upload`);
+                        // Automatically save metadata before uploading to ensure correct channel is used
+                        await axios.patch(`/api/stories/${story.id}`, {
+                            youtube_title: story.youtube_title,
+                            youtube_description: story.youtube_description,
+                            youtube_tags: story.youtube_tags,
+                            youtube_token_id: story.youtube_token_id
+                        });
+
                         story.youtube_upload_status = 'uploading';
+                        const response = await axios.post(`/api/stories/${story.id}/upload`);
                         alert(response.data.message);
                         // Start polling to check upload status
                         const poll = setInterval(async () => {
                             const res = await axios.get(`/api/stories/${story.id}`);
                             story.youtube_upload_status = res.data.youtube_upload_status;
                             story.youtube_video_id = res.data.youtube_video_id;
+                            story.youtube_error = res.data.youtube_error;
                             if (story.youtube_upload_status === 'completed' || story.youtube_upload_status === 'failed') {
                                 clearInterval(poll);
                             }
                         }, 10000);
                     } catch (error) {
                         console.error('Error uploading to YouTube:', error);
-                        alert(error.response?.data?.error || 'Failed to trigger upload');
+                        story.youtube_upload_status = 'failed';
+                        alert(error.response?.data?.message || error.response?.data?.error || 'Failed to start upload');
                     }
                 };
 
@@ -398,13 +468,18 @@
                     }
                 };
 
-                onMounted(fetchStories);
+                onMounted(() => {
+                    fetchStories();
+                    fetchChannels();
+                    setInterval(fetchStories, 5000);
+                });
 
                 return {
                     stories,
                     newStory,
                     loading,
                     generating,
+                    channels,
                     generateStory,
                     submitStory,
                     updateMetadata,

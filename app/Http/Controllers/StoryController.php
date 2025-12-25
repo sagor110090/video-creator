@@ -13,7 +13,7 @@ class StoryController extends Controller
 {
     public function index()
     {
-        return Story::withCount('scenes')->latest()->get();
+        return Story::with(['youtubeChannel'])->withCount('scenes')->latest()->get();
     }
 
     public function generate(Request $request, AiStoryService $aiService)
@@ -40,6 +40,7 @@ class StoryController extends Controller
             'youtube_title' => 'nullable|string|max:100',
             'youtube_description' => 'nullable|string',
             'youtube_tags' => 'nullable|string',
+            'youtube_token_id' => 'nullable|exists:youtube_tokens,id',
         ]);
 
         $story = Story::create([
@@ -50,6 +51,7 @@ class StoryController extends Controller
             'youtube_title' => $request->youtube_title,
             'youtube_description' => $request->youtube_description,
             'youtube_tags' => $request->youtube_tags,
+            'youtube_token_id' => $request->youtube_token_id,
         ]);
 
         ProcessStoryJob::dispatch($story);
@@ -63,15 +65,17 @@ class StoryController extends Controller
             'youtube_title' => 'nullable|string|max:100',
             'youtube_description' => 'nullable|string',
             'youtube_tags' => 'nullable|string',
+            'youtube_token_id' => 'nullable|exists:youtube_tokens,id',
         ]);
 
         $story->update($request->only([
             'youtube_title',
             'youtube_description',
-            'youtube_tags'
+            'youtube_tags',
+            'youtube_token_id'
         ]));
 
-        return response()->json($story);
+        return response()->json($story->load('youtubeChannel'));
     }
 
     public function uploadToYouTube(Story $story)
