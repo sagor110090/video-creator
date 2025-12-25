@@ -22,7 +22,7 @@ class YoutubeTokensTableSeeder extends Seeder
             0 =>
             array (
                 'id' => 2,
-                'access_token' => 'PLACEHOLDER_ACCESS_TOKEN',
+                'access_token' => '{"access_token":"PLACEHOLDER_ACCESS_TOKEN","expires_in":3600,"token_type":"Bearer"}',
                 'refresh_token' => 'PLACEHOLDER_REFRESH_TOKEN',
                 'expires_at' => '2025-12-25 06:51:31',
                 'created_at' => '2025-12-24 21:39:18',
@@ -34,7 +34,7 @@ class YoutubeTokensTableSeeder extends Seeder
             1 =>
             array (
                 'id' => 3,
-                'access_token' => 'PLACEHOLDER_ACCESS_TOKEN',
+                'access_token' => '{"access_token":"PLACEHOLDER_ACCESS_TOKEN","expires_in":3600,"token_type":"Bearer"}',
                 'refresh_token' => 'PLACEHOLDER_REFRESH_TOKEN',
                 'expires_at' => '2025-12-25 10:38:37',
                 'created_at' => '2025-12-24 21:44:02',
@@ -46,7 +46,7 @@ class YoutubeTokensTableSeeder extends Seeder
             2 =>
             array (
                 'id' => 4,
-                'access_token' => 'PLACEHOLDER_ACCESS_TOKEN',
+                'access_token' => '{"access_token":"PLACEHOLDER_ACCESS_TOKEN","expires_in":3600,"token_type":"Bearer"}',
                 'refresh_token' => 'PLACEHOLDER_REFRESH_TOKEN',
                 'expires_at' => '2025-12-25 11:33:24',
                 'created_at' => '2025-12-25 10:33:25',

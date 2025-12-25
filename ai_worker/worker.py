@@ -257,10 +257,10 @@ def step4_automatic_assembly(output_dir, scene_videos, background_music=None):
     # Step 4.2: Add background music if provided
     if background_music and os.path.exists(background_music):
         # -stream_loop -1 loops the background music
-        # -filter_complex mixes audio: [1:a]volume=0.2 lowers background music, [0:a] is narration
+        # -filter_complex mixes audio: [1:a]volume=0.08 lowers background music, [0:a]volume=1.5 boosts narration
         music_mix_command = [
             FFMPEG_PATH, '-y', '-i', temp_video_path, '-stream_loop', '-1', '-i', background_music,
-            '-filter_complex', "[1:a]volume=0.15[bg];[0:a][bg]amix=inputs=2:duration=first[a]",
+            '-filter_complex', "[1:a]volume=0.08[bg];[0:a]volume=1.5[narr];[narr][bg]amix=inputs=2:duration=first[a]",
             '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-shortest', final_video_path
         ]
         if run_command(music_mix_command):
