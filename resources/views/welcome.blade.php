@@ -40,6 +40,56 @@
                         <input type="radio" v-model="newStory.style" value="science_short" class="mr-2">
                         <span class="text-gray-700" :class="{'font-bold text-purple-600': newStory.style === 'science_short'}">The 60s Lab (Science)</span>
                     </label>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="radio" v-model="newStory.style" value="hollywood_hype" class="mr-2">
+                        <span class="text-gray-700" :class="{'font-bold text-red-600': newStory.style === 'hollywood_hype'}">Hollywood Hype (Entertainment)</span>
+                    </label>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="radio" v-model="newStory.style" value="trade_wave" class="mr-2">
+                        <span class="text-gray-700" :class="{'font-bold text-green-600': newStory.style === 'trade_wave'}">TradeWave (Trading)</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Search Section for Hollywood Hype -->
+            <div v-if="newStory.style === 'hollywood_hype'" class="mb-4 p-4 bg-red-50 border border-red-100 rounded-lg">
+                <label class="block text-red-700 text-sm font-bold mb-2 flex items-center">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    Search Latest News (Optional)
+                </label>
+                <div class="flex space-x-2">
+                    <input v-model="newStory.search_query" type="text" class="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-sm" placeholder="e.g. Dakota Johnson news, Jamie Dornan latest">
+                    <button @click="searchNews" :disabled="searching_news" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition flex items-center">
+                        <svg v-if="searching_news" class="animate-spin h-4 w-4 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        Search
+                    </button>
+                </div>
+                <div v-if="news_results.length > 0" class="mt-3 space-y-2 max-h-40 overflow-y-auto">
+                    <div v-for="(news, index) in news_results" :key="index" @click="selectNews(news)" class="p-2 bg-white border rounded cursor-pointer hover:border-red-400 transition text-xs">
+                        <p class="font-bold">[[ news.title ]]</p>
+                        <p class="text-gray-500 truncate">[[ news.snippet ]]</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search Section for TradeWave -->
+            <div v-if="newStory.style === 'trade_wave'" class="mb-4 p-4 bg-green-50 border border-green-100 rounded-lg">
+                <label class="block text-green-700 text-sm font-bold mb-2 flex items-center">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    Search Market Updates (Optional)
+                </label>
+                <div class="flex space-x-2">
+                    <input v-model="newStory.search_query" type="text" class="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm" placeholder="e.g. Bitcoin price today, Nvidia stock update">
+                    <button @click="searchNews" :disabled="searching_news" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition flex items-center">
+                        <svg v-if="searching_news" class="animate-spin h-4 w-4 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        Search
+                    </button>
+                </div>
+                <div v-if="news_results.length > 0" class="mt-3 space-y-2 max-h-40 overflow-y-auto">
+                    <div v-for="(news, index) in news_results" :key="index" @click="selectNews(news)" class="p-2 bg-white border rounded cursor-pointer hover:border-green-400 transition text-xs">
+                        <p class="font-bold">[[ news.title ]]</p>
+                        <p class="text-gray-500 truncate">[[ news.snippet ]]</p>
+                    </div>
                 </div>
             </div>
 
@@ -270,7 +320,7 @@
     </div>
 
     <script>
-        const { createApp, ref, onMounted } = Vue;
+        const { createApp, ref, onMounted, watch } = Vue;
 
         createApp({
             delimiters: ['[[', ']]'],
@@ -278,17 +328,36 @@
                 const stories = ref([]);
                 const loading = ref(false);
                 const generating = ref(false);
+                const searching_news = ref(false);
+                const news_results = ref([]);
                 const newStory = ref({
                     title: '',
                     content: '',
-                    aspect_ratio: '9:16',
-                    style: 'science_short',
+                    style: 'story',
+                    aspect_ratio: '16:9',
                     youtube_title: '',
                     youtube_description: '',
                     youtube_tags: '',
-                    youtube_token_id: null
+                    youtube_token_id: null,
+                    search_query: ''
                 });
                 const channels = ref([]);
+
+                watch(() => newStory.value.style, (newStyle) => {
+                    if (channels.value.length === 0) return;
+
+                    let targetTitle = '';
+                    if (newStyle === 'science_short') targetTitle = 'The 60s Lab';
+                    else if (newStyle === 'hollywood_hype') targetTitle = 'Hollywood Hype';
+                    else if (newStyle === 'trade_wave') targetTitle = 'TradeWave';
+
+                    if (targetTitle) {
+                        const channel = channels.value.find(c => c.channel_title.includes(targetTitle));
+                        if (channel) {
+                            newStory.value.youtube_token_id = channel.id;
+                        }
+                    }
+                });
 
                 const fetchStories = async () => {
                     try {
@@ -309,6 +378,26 @@
                     } catch (error) {
                         console.error('Error fetching channels:', error);
                     }
+                };
+
+                const searchNews = async () => {
+                    if (!newStory.value.search_query) return;
+                    searching_news.value = true;
+                    try {
+                        const response = await axios.get(`/api/news/search?q=${encodeURIComponent(newStory.value.search_query)}`);
+                        news_results.value = response.data;
+                    } catch (error) {
+                        console.error('Error searching news:', error);
+                        alert('Failed to search news');
+                    } finally {
+                        searching_news.value = false;
+                    }
+                };
+
+                const selectNews = (news) => {
+                    newStory.value.content = `Latest news about ${newStory.value.search_query}:\n\n${news.title}\n\n${news.snippet}`;
+                    newStory.value.title = news.title;
+                    news_results.value = [];
                 };
 
                 const generateStory = async () => {
@@ -340,14 +429,19 @@
                     loading.value = true;
                     try {
                         await axios.post('/api/stories', newStory.value);
+                        const currentStyle = newStory.value.style;
+                        const currentToken = newStory.value.youtube_token_id;
+
                         newStory.value = {
                             title: '',
                             content: '',
                             aspect_ratio: '9:16',
-                            style: 'science_short',
+                            style: currentStyle,
                             youtube_title: '',
                             youtube_description: '',
-                            youtube_tags: ''
+                            youtube_tags: '',
+                            youtube_token_id: currentToken,
+                            search_query: ''
                         };
                         fetchStories();
                         // Poll for updates every 5 seconds
@@ -480,8 +574,12 @@
                     loading,
                     generating,
                     channels,
+                    searching_news,
+                    news_results,
                     generateStory,
                     submitStory,
+                    searchNews,
+                    selectNews,
                     updateMetadata,
                     regenerateMetadata,
                     uploadToYouTube,

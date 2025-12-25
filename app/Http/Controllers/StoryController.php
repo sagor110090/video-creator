@@ -20,7 +20,7 @@ class StoryController extends Controller
     {
         $request->validate([
             'topic' => 'nullable|string|max:255',
-            'style' => 'nullable|string|in:story,science_short',
+            'style' => 'nullable|string|in:story,science_short,hollywood_hype,trade_wave',
         ]);
 
         try {
@@ -36,6 +36,7 @@ class StoryController extends Controller
         $request->validate([
             'content' => 'required|string|min:10',
             'title' => 'nullable|string|max:255',
+            'style' => 'nullable|string|in:story,science_short,hollywood_hype,trade_wave',
             'aspect_ratio' => 'nullable|string|in:16:9,9:16',
             'youtube_title' => 'nullable|string|max:100',
             'youtube_description' => 'nullable|string',
@@ -46,6 +47,7 @@ class StoryController extends Controller
         $story = Story::create([
             'title' => $request->title ?? 'Untitled Story',
             'content' => $request->content,
+            'style' => $request->style ?? 'story',
             'status' => 'pending',
             'aspect_ratio' => $request->aspect_ratio ?? '16:9',
             'youtube_title' => $request->youtube_title,
@@ -131,5 +133,33 @@ class StoryController extends Controller
         ProcessStoryJob::dispatch($story);
 
         return response()->json(['message' => 'Video regeneration started.']);
+    }
+
+    public function searchNews(Request $request)
+    {
+        $query = $request->query('q');
+        if (!$query) {
+            return response()->json([]);
+        }
+
+        // Use Google Search via a simple scraping or a proper API if available
+        // For now, let's use a simpler approach: use AI to "simulate" or provide latest info if it has web access
+        // OR we can use a free news API. Let's try to use a simple news search service if available.
+        // For this demo, I'll use a public news API or simulate with AI if no key is provided.
+
+        try {
+            // Using AI to generate "news" snippets based on the query as a fallback/simulator
+            // or we could use a real API like NewsAPI.org if the user has a key.
+            // Let's implement a simple AI-based news summary generator for now to avoid dependency on external API keys.
+
+            $aiService = app(AiStoryService::class);
+            // We'll add a specific method to AiStoryService for this
+            $news = $aiService->searchNews($query);
+
+            return response()->json($news);
+        } catch (\Exception $e) {
+            Log::error('News search failed: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to search news'], 500);
+        }
     }
 }

@@ -9,6 +9,7 @@ class Story extends Model
     protected $fillable = [
         'title',
         'content',
+        'style',
         'status',
         'video_path',
         'aspect_ratio',

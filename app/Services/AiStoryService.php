@@ -17,13 +17,17 @@ class AiStoryService
         $this->provider = env('AI_STORY_PROVIDER', 'groq');
 
         if ($this->provider === 'deepseek') {
-            $this->apiKey = config('services.deepseek.api_key');
-            $this->baseUrl = 'https://api.deepseek.com/v1/chat/completions';
+            $this->apiKey = env('DEEPSEEK_API_KEY');
+            $this->baseUrl = 'https://api.deepseek.com/chat/completions';
             $this->model = 'deepseek-chat';
         } else {
-            $this->apiKey = config('services.groq.api_key');
+            $this->apiKey = env('GROQ_API_KEY');
             $this->baseUrl = 'https://api.groq.com/openai/v1/chat/completions';
             $this->model = 'llama-3.3-70b-versatile';
+        }
+
+        if (empty($this->apiKey)) {
+            Log::error("AI Story Service: API key for {$this->provider} is missing!");
         }
     }
 
@@ -71,6 +75,18 @@ class AiStoryService
             The script should be approximately 130-150 words to fit within 60 seconds when spoken.
             Use a 'hook -> explanation -> mind-blowing fact' structure.
             The tone should be enthusiastic, professional, and easy to understand.";
+        } elseif ($style === 'hollywood_hype') {
+            $prompt = "Write a gossipy, high-energy, and {$selectedStyle} Hollywood news script for a 60-second YouTube Short.
+            Focus on the latest celebrity news, specifically regarding stars like Dakota Johnson or Jamie Dornan if mentioned.
+            The script should be approximately 130-150 words.
+            Use a 'shocking hook -> juicy details -> call to action' structure.
+            The tone should be dramatic, exciting, and viral-ready.";
+        } elseif ($style === 'trade_wave') {
+            $prompt = "Write a professional, high-stakes, and {$selectedStyle} trading and investment script for a 60-second YouTube Short.
+            Focus on market updates, crypto trends, stock analysis, or investment ideas.
+            The script should be approximately 130-150 words.
+            Use a 'market hook -> data analysis -> investment insight' structure.
+            The tone should be authoritative, urgent, and insightful.";
         } else {
             $prompt = "Write a short, engaging, and {$selectedStyle} story that would make a 2.5 minute video.
             The story should be approximately 350-400 words.
@@ -97,11 +113,43 @@ class AiStoryService
                 "How artificial intelligence is evolving",
                 "The science of dreams"
             ];
-            $randomTopic = $scienceTopics[array_rand($scienceTopics)];
+            $hypeTopics = [
+                "Dakota Johnson's latest red carpet look that has everyone talking",
+                "Is Jamie Dornan returning for a new thriller?",
+                "The Fifty Shades reunion fans are waiting for",
+                "Dakota Johnson's secret to her flawless style",
+                "Jamie Dornan's transition from model to superstar",
+                "The most expensive celebrity homes in Hollywood",
+                "Upcoming blockbuster movies in 2026",
+                "Celebrity fashion trends that are taking over",
+                "The truth behind the latest Hollywood rumors",
+                "How stars prepare for the Oscars"
+            ];
+            $tradeTopics = [
+                "Bitcoin's latest price surge and what it means for 2026",
+                "The top 3 AI stocks to watch this month",
+                "How the Federal Reserve's next move will impact your portfolio",
+                "The rise of decentralized finance and its future",
+                "Why gold is still the ultimate hedge in a volatile market",
+                "Understanding the 'fear and greed' index in crypto",
+                "The impact of global trade shifts on emerging markets",
+                "Why dividend investing is making a massive comeback",
+                "The truth about day trading vs long-term hodling",
+                "How to spot the next big tech unicorn before the IPO"
+            ];
+
+            if ($style === 'hollywood_hype') {
+                $randomTopic = $hypeTopics[array_rand($hypeTopics)];
+            } elseif ($style === 'trade_wave') {
+                $randomTopic = $tradeTopics[array_rand($tradeTopics)];
+            } else {
+                $randomTopic = $scienceTopics[array_rand($scienceTopics)];
+            }
+
             $prompt .= " Choose an interesting and cinematic topic. You could talk about something like: {$randomTopic}. BUT DO NOT USE 'The Quantum Echo' as a title or theme.";
         }
 
-        $wordCount = ($style === 'science_short') ? '130-150 words' : '350-400 words';
+        $wordCount = ($style === 'science_short' || $style === 'hollywood_hype' || $style === 'trade_wave') ? '130-150 words' : '350-400 words';
 
         $prompt .= "\n\nFormat your response as a JSON object with the following fields:
         'title': A short catchy title for the story. MUST NOT BE 'The Quantum Echo'.
@@ -126,11 +174,10 @@ class AiStoryService
                         'content' => $prompt . "\n\nIMPORTANT: Ensure this content is completely different from any previous generations. Explore a unique angle or a surprising fact."
                     ]
                 ],
-                'temperature' => 0.9,
+                'temperature' => 0.7,
             ];
 
-            // Groq supports response_format, DeepSeek might need it in the prompt or different handling
-            if ($this->provider === 'groq') {
+            if ($this->provider === 'groq' || $this->provider === 'deepseek') {
                 $payload['response_format'] = ['type' => 'json_object'];
             }
 
@@ -167,6 +214,73 @@ class AiStoryService
         } catch (\Exception $e) {
             Log::error('AI Story Generation failed: ' . $e->getMessage());
             throw $e;
+        }
+    }
+
+    public function searchNews(string $query): array
+    {
+        $prompt = "Act as a news search engine. For the query: '{$query}', provide 3 realistic and recent-sounding news snippets.
+        If the query is about Hollywood/Entertainment, focus on stars like Dakota Johnson or Jamie Dornan.
+        If the query is about Trading/Finance/Market, focus on stocks, crypto, or economic updates.
+        Each snippet should have a catchy 'title' and a 'snippet' (summary).
+        Ensure the news sounds current and exciting.
+
+        Format your response as a JSON array of objects, like this:
+        [
+          {\"title\": \"...\", \"snippet\": \"...\"},
+          {\"title\": \"...\", \"snippet\": \"...\"},
+          {\"title\": \"...\", \"snippet\": \"...\"}
+        ]";
+
+        try {
+            $payload = [
+                'model' => $this->model,
+                'messages' => [
+                    ['role' => 'system', 'content' => 'You are a real-time news aggregator for entertainment and finance. Output ONLY valid JSON.'],
+                    ['role' => 'user', 'content' => $prompt]
+                ],
+                'temperature' => 0.8,
+            ];
+
+            if ($this->provider === 'groq' || $this->provider === 'deepseek') {
+                $payload['response_format'] = ['type' => 'json_object'];
+            }
+
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $this->apiKey,
+                'Content-Type' => 'application/json',
+            ])->post($this->baseUrl, $payload);
+
+            if ($response->failed()) {
+                throw new \Exception("News generation failed");
+            }
+
+            $data = $response->json();
+            $rawContent = $data['choices'][0]['message']['content'];
+            $cleanContent = preg_replace('/^```json\s*|\s*```$/', '', trim($rawContent));
+
+            // If it's a single object instead of an array, wrap it
+            $decoded = json_decode($cleanContent, true);
+            if (isset($decoded['news'])) return $decoded['news'];
+            return is_array($decoded) ? $decoded : [$decoded];
+
+        } catch (\Exception $e) {
+            Log::error('News simulation failed: ' . $e->getMessage());
+
+            // Fallback based on query keywords
+            if (stripos($query, 'crypto') !== false || stripos($query, 'stock') !== false || stripos($query, 'market') !== false || stripos($query, 'bitcoin') !== false) {
+                return [
+                    ['title' => "Bitcoin Breaks New Resistance", 'snippet' => "Bitcoin has surged past key resistance levels as institutional interest continues to grow."],
+                    ['title' => "AI Stocks Rally on Tech Earnings", 'snippet' => "Major tech companies report better-than-expected earnings, sending AI-focused stocks to new highs."],
+                    ['title' => "Federal Reserve Holds Rates", 'snippet' => "The Fed decided to keep interest rates steady, sparking a relief rally across global markets."]
+                ];
+            }
+
+            return [
+                ['title' => "Dakota Johnson Spotted in London", 'snippet' => "The star was seen filming her latest project in central London, looking as stylish as ever."],
+                ['title' => "Jamie Dornan's New Project Revealed", 'snippet' => "Sources confirm Jamie Dornan has signed on for a high-stakes thriller filming this summer."],
+                ['title' => "Fifty Shades Duo Reunite?", 'snippet' => "Rumors are swirling about a potential project featuring both Dakota and Jamie. Fans are ecstatic."]
+            ];
         }
     }
 }

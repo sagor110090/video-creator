@@ -73,15 +73,24 @@ def generate_mock_image(output_path, text, aspect_ratio='16:9'):
         with open(output_path, 'w') as f:
             f.write("mock image content")
 
-def generate_tts_audio(output_path, text):
+def generate_tts_audio(output_path, text, style='story'):
     """Generates human-like audio using Microsoft Edge TTS."""
     # Path to the edge-tts executable in our venv
     edge_tts_path = os.path.join(os.path.dirname(__file__), 'venv', 'bin', 'edge-tts')
 
     # We'll use a high-quality neural voice
-    # en-US-AndrewNeural is a very natural male voice
-    # en-US-AvaNeural is also great
+    # Default: en-US-AndrewNeural (natural male)
+    # Science: en-US-BrianNeural (authoritative)
+    # Entertainment: en-US-EmmaNeural (energetic female)
+    # Trade: en-US-ChristopherNeural (professional male)
+
     voice = "en-US-AndrewNeural"
+    if style == 'science_short':
+        voice = "en-US-BrianNeural"
+    elif style == 'hollywood_hype':
+        voice = "en-US-EmmaNeural"
+    elif style == 'trade_wave':
+        voice = "en-US-ChristopherNeural"
 
     command = [
         edge_tts_path,
@@ -90,7 +99,7 @@ def generate_tts_audio(output_path, text):
         '--voice', voice
     ]
 
-    print(f"DEBUG: Generating human-like voice with edge-tts: {voice}", file=sys.stderr)
+    print(f"DEBUG: Generating human-like voice with edge-tts: {voice} for style {style}", file=sys.stderr)
 
     if not run_command(command):
         # Fallback to macOS 'say' if edge-tts fails
@@ -219,9 +228,9 @@ def create_scene_video(image_path, audio_path, output_path, narration, scene_ind
     if os.path.exists(text_file_path):
         os.remove(text_file_path)
 
-def step2_voice_generation(output_path, text):
+def step2_voice_generation(output_path, text, style='story'):
     """Generates AI voice for the scene."""
-    return generate_tts_audio(output_path, text)
+    return generate_tts_audio(output_path, text, style)
 
 def step3_video_generation(img_path, aud_path, vid_path, narration, scene_index, aspect_ratio='16:9'):
     """Generates visual content and creates the scene video."""
@@ -270,6 +279,7 @@ def main():
 
     data = json.loads(sys.argv[1])
     story_id = data['story_id']
+    style = data.get('style', 'story')
     scenes = data['scenes']
     output_dir = data['output_dir']
     aspect_ratio = data.get('aspect_ratio', '16:9')
@@ -277,7 +287,7 @@ def main():
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    print(f"DEBUG: Processing story {story_id} with {len(scenes)} scenes in {aspect_ratio}", file=sys.stderr)
+    print(f"DEBUG: Processing story {story_id} (style: {style}) with {len(scenes)} scenes in {aspect_ratio}", file=sys.stderr)
     scene_videos = []
 
     for i, scene in enumerate(scenes):
@@ -291,7 +301,7 @@ def main():
             generate_mock_image(img_path, scene['image_prompt'][:50] + "...", aspect_ratio)
 
         # 2. Step 2: Voice Generation
-        step2_voice_generation(aud_path, scene['narration'])
+        step2_voice_generation(aud_path, scene['narration'], style)
 
         # 3. Step 3: Video Generation (Scene creation)
         step3_video_generation(img_path, aud_path, vid_path, scene['narration'], i, aspect_ratio)

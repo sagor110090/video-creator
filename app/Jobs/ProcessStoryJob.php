@@ -60,6 +60,17 @@ class ProcessStoryJob implements ShouldQueue
         // Split into sentences (Story Parser logic)
         $sentences = preg_split('/(?<=[.!?])\s+/', $content, -1, PREG_SPLIT_NO_EMPTY);
 
+        $style = $this->story->style ?? 'story';
+        $visualStyle = "Cinematic storybook illustration";
+
+        if ($style === 'science_short') {
+            $visualStyle = "High-tech scientific visualization, 8k, detailed, space/lab setting";
+        } elseif ($style === 'hollywood_hype') {
+            $visualStyle = "Glossy celebrity news style, paparazzi lighting, red carpet atmosphere";
+        } elseif ($style === 'trade_wave') {
+            $visualStyle = "Professional financial news, trading charts background, modern office, clean aesthetic";
+        }
+
         $storyboard = [];
         foreach ($sentences as $sentence) {
             $sentence = trim($sentence);
@@ -67,7 +78,7 @@ class ProcessStoryJob implements ShouldQueue
 
             $storyboard[] = [
                 'narration' => $sentence,
-                'image_prompt' => "Cinematic storybook illustration of: " . $sentence,
+                'image_prompt' => "{$visualStyle} of: " . $sentence,
             ];
         }
 
@@ -90,6 +101,7 @@ class ProcessStoryJob implements ShouldQueue
 
         $inputData = [
             'story_id' => $this->story->id,
+            'style' => $this->story->style ?? 'story',
             'scenes' => $scenes,
             'aspect_ratio' => $this->story->aspect_ratio ?? '16:9',
             'output_dir' => storage_path("app/public/videos/{$this->story->id}"),
