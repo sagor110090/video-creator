@@ -182,7 +182,7 @@ class YouTubeService
 
             $finalError = $errorMessage;
             if (strpos($errorMessage, 'uploadLimitExceeded') !== false || strpos($errorMessage, 'exceeded the number of videos') !== false) {
-                $finalError = "Upload limit reached for channel '{$token->channel_title}'. Try again in 24h or use another account.";
+                $finalError = "YouTube API upload limit reached for '{$token->channel_title}'. Note: API upload limits are separate and more restrictive than YouTube Studio manual uploads. Please try again in 24 hours or request a quota increase in Google Cloud Console.";
             }
 
             $story->update([

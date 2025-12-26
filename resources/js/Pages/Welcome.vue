@@ -4,8 +4,12 @@ import { Head, Link } from '@inertiajs/vue3';
 import axios from 'axios';
 import StoryCard from '@/Components/StoryCard.vue';
 import PublishModal from '@/Components/PublishModal.vue';
+import { useToast } from 'vue-toast-notification';
+import Swal from 'sweetalert2';
 
+const toast = useToast();
 const stories = ref([]);
+const pagination = ref(null);
 const loading = ref(false);
 const generating = ref(false);
 const searching_news = ref(false);
@@ -39,10 +43,11 @@ const newStory = ref({
     search_query: ''
 });
 
-const fetchStories = async () => {
+const fetchStories = async (page = 1) => {
     try {
-        const response = await axios.get('/api/stories');
-        stories.value = response.data;
+        const response = await axios.get(`/api/stories?page=${page}`);
+        stories.value = response.data.data;
+        pagination.value = response.data;
     } catch (error) {
         console.error('Error fetching stories:', error);
     }
@@ -69,7 +74,7 @@ onMounted(() => {
 
     fetchStories();
     fetchChannels();
-    setInterval(fetchStories, 5000);
+    setInterval(() => fetchStories(pagination.value?.current_page || 1), 5000);
 });
 
 watch(() => newStory.value.style, (newStyle) => {
@@ -87,12 +92,13 @@ watch(() => newStory.value.style, (newStyle) => {
 
 const submitStory = async () => {
     if (!newStory.value.content || newStory.value.content.length < 10) {
-        alert('Please provide a longer story description.');
+        toast.error('Please provide a longer story description.');
         return;
     }
     loading.value = true;
     try {
         await axios.post('/api/stories', newStory.value);
+        toast.success('Story created successfully!');
         newStory.value = {
             title: '',
             content: '',
@@ -164,23 +170,53 @@ const selectNews = (news) => {
 };
 
 const regenerateVideo = async (story) => {
-    if (!confirm('Re-run AI generation for this story? Existing video will be replaced.')) return;
+    const result = await Swal.fire({
+        title: 'Regenerate Video?',
+        text: 'Re-run AI generation for this story? Existing video will be replaced.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#4f46e5',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Yes, regenerate it!',
+        background: isDark.value ? '#0f172a' : '#ffffff',
+        color: isDark.value ? '#f8fafc' : '#0f172a'
+    });
+
+    if (!result.isConfirmed) return;
+
     try {
         story.status = 'pending';
         await axios.post(`/api/stories/${story.id}/regenerate`);
+        toast.info('Video regeneration started.');
         fetchStories();
     } catch (error) {
         console.error('Error regenerating story:', error);
+        toast.error('Failed to regenerate video.');
     }
 };
 
 const deleteStory = async (story) => {
-    if (!confirm('Are you sure you want to delete this story?')) return;
+    const result = await Swal.fire({
+        title: 'Are you sure?',
+        text: "You won't be able to revert this!",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Yes, delete it!',
+        background: isDark.value ? '#0f172a' : '#ffffff',
+        color: isDark.value ? '#f8fafc' : '#0f172a'
+    });
+
+    if (!result.isConfirmed) return;
+
     try {
         await axios.delete(`/api/stories/${story.id}`);
+        toast.success('Story deleted.');
         fetchStories();
     } catch (error) {
         console.error('Error deleting story:', error);
+        toast.error('Failed to delete story.');
     }
 };
 
@@ -196,10 +232,11 @@ const confirmPublish = async (formData) => {
         await axios.patch(`/api/stories/${publishingStory.value.id}`, formData);
         // Then trigger upload
         await axios.post(`/api/stories/${publishingStory.value.id}/upload`);
+        toast.success('Upload queued successfully!');
         fetchStories();
     } catch (error) {
         console.error('Error publishing story:', error);
-        alert('Failed to start upload. Please try again.');
+        toast.error('Failed to start upload. Please try again.');
     }
 };
 </script>
@@ -453,6 +490,24 @@ const confirmPublish = async (formData) => {
                                @regenerate="regenerateVideo"
                                @delete="deleteStory"
                                @upload="openPublishModal" />
+                </div>
+
+                <!-- Pagination -->
+                <div v-if="pagination && pagination.last_page > 1" class="mt-12 flex justify-center items-center space-x-2">
+                    <button v-for="link in pagination.links"
+                            :key="link.label"
+                            @click="link.url ? fetchStories(new URL(link.url).searchParams.get('page')) : null"
+                            :disabled="!link.url || link.active"
+                            class="px-4 py-2 rounded-xl text-sm font-bold transition-all border shadow-sm flex items-center justify-center min-w-[40px]"
+                            :class="[
+                                link.active
+                                    ? 'bg-indigo-600 border-indigo-600 text-white'
+                                    : link.url
+                                        ? 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-indigo-500 hover:text-indigo-600'
+                                        : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-300 dark:text-slate-600 cursor-not-allowed'
+                            ]"
+                            v-html="link.label">
+                    </button>
                 </div>
             </section>
         </main>

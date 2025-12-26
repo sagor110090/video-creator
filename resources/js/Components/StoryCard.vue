@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
 
 const props = defineProps({
     story: {
@@ -9,6 +9,36 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['regenerate', 'delete', 'upload']);
+const videoLoaded = ref(false);
+const isVisible = ref(false);
+const cardRef = ref(null);
+let observer = null;
+
+const handleVideoLoad = () => {
+    videoLoaded.value = true;
+};
+
+onMounted(() => {
+    observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+            isVisible.value = true;
+            observer.disconnect();
+        }
+    }, {
+        rootMargin: '100px', // Start loading when it's 100px away from the viewport
+        threshold: 0.01
+    });
+
+    if (cardRef.value) {
+        observer.observe(cardRef.value);
+    }
+});
+
+onUnmounted(() => {
+    if (observer) {
+        observer.disconnect();
+    }
+});
 
 const statusClass = (status) => {
     switch (status) {
@@ -31,14 +61,28 @@ const formatDate = (dateString) => {
 </script>
 
 <template>
-    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all duration-300 group flex flex-col h-full">
+    <div ref="cardRef" class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all duration-300 group flex flex-col h-full">
         <!-- Video Preview Area -->
         <div class="relative rounded-t-2xl overflow-hidden bg-slate-900 dark:bg-black aspect-video flex items-center justify-center">
-            <video v-if="story.status === 'completed' && story.video_path"
-                   controls class="w-full h-full object-contain"
-                   :class="story.aspect_ratio === '9:16' ? 'max-w-[180px] mx-auto' : ''">
-                <source :src="'/storage/' + story.video_path" type="video/mp4">
-            </video>
+            <template v-if="story.status === 'completed' && story.video_path">
+                <!-- Placeholder / Skeleton -->
+                <div v-if="!videoLoaded || !isVisible" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-800 animate-pulse">
+                    <svg class="w-10 h-10 text-slate-300 dark:text-slate-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    <span class="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Loading Preview...</span>
+                </div>
+
+                <video v-if="isVisible"
+                       @loadeddata="handleVideoLoad"
+                       v-show="videoLoaded"
+                       controls
+                       preload="metadata"
+                       class="w-full h-full object-contain"
+                       :class="story.aspect_ratio === '9:16' ? 'max-w-[180px] mx-auto' : ''">
+                    <source :src="'/storage/' + story.video_path" type="video/mp4">
+                </video>
+            </template>
 
             <!-- Status Overlay for Processing -->
             <div v-if="story.status === 'processing' || story.status === 'pending'"
@@ -102,17 +146,33 @@ const formatDate = (dateString) => {
 
                     <div class="grid grid-cols-2 gap-2">
                         <a :href="'/storage/' + story.video_path" download
+                           :class="story.youtube_upload_status === 'failed' ? 'col-span-1' : ''"
                            class="flex items-center justify-center space-x-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold py-2 rounded-xl transition-all text-sm">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                             <span>Save</span>
                         </a>
-                        <button v-if="!story.youtube_upload_status || story.youtube_upload_status === 'failed'"
+
+                        <button v-if="story.youtube_upload_status === 'failed'"
+                                @click="emit('upload', story)"
+                                class="col-span-1 flex items-center justify-center space-x-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-xl transition-all text-sm">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                            <span>Retry</span>
+                        </button>
+
+                        <button v-else-if="!story.youtube_upload_status"
                                 @click="emit('upload', story)"
                                 class="flex items-center justify-center space-x-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-xl transition-all text-sm">
                             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
                             <span>Publish</span>
                         </button>
-                        <div v-else class="col-span-2">
+
+                        <div v-if="story.youtube_upload_status === 'failed' && story.youtube_error" class="col-span-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-lg">
+                            <p class="text-[10px] text-red-600 dark:text-red-400 leading-tight">
+                                <span class="font-bold">Error:</span> {{ story.youtube_error }}
+                            </p>
+                        </div>
+
+                        <div v-if="story.youtube_upload_status && story.youtube_upload_status !== 'failed'" class="col-span-2">
                             <div v-if="story.youtube_upload_status === 'completed'" class="w-full flex items-center justify-between p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 rounded-xl border border-blue-100 dark:border-blue-900/30">
                                 <div class="flex items-center">
                                     <img :src="story.youtube_channel?.channel_thumbnail" class="w-5 h-5 rounded-full mr-2">

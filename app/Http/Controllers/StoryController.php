@@ -13,7 +13,7 @@ class StoryController extends Controller
 {
     public function index()
     {
-        return Story::with(['youtubeChannel'])->withCount('scenes')->latest()->get();
+        return Story::with(['youtubeChannel'])->withCount('scenes')->latest()->paginate(9);
     }
 
     public function generate(Request $request, AiStoryService $aiService)
