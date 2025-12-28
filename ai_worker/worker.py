@@ -6,15 +6,28 @@ import urllib.request
 import urllib.parse
 import time
 import re
+import shutil
 
-# Set the absolute path to ffmpeg
-FFMPEG_PATH = '/usr/bin/ffmpeg'
+def get_executable_path(name, default_path=None):
+    """Finds an executable in the system PATH or returns a default."""
+    path = shutil.which(name)
+    if path:
+        return path
+    if default_path and os.path.exists(default_path):
+        return default_path
+    return name
+
+# Detect paths for ffmpeg and ffprobe
+FFMPEG_PATH = get_executable_path('ffmpeg', '/usr/bin/ffmpeg')
+FFPROBE_PATH = get_executable_path('ffprobe', '/usr/bin/ffprobe')
 
 def run_command(command):
     try:
         # Replace 'ffmpeg' with the absolute path
         if command[0] == 'ffmpeg':
             command[0] = FFMPEG_PATH
+        elif command[0] == 'ffprobe':
+            command[0] = FFPROBE_PATH
 
         print(f"Running: {' '.join(command)}", file=sys.stderr)
         result = subprocess.run(command, capture_output=True, text=True)
@@ -27,8 +40,9 @@ def run_command(command):
         return False
 
 def generate_ai_image(output_path, prompt, aspect_ratio='16:9'):
-    """Generates an AI image using Pollinations.ai or a fallback."""
-    width, height = (1280, 720) if aspect_ratio == '16:9' else (720, 1280)
+    """Generates high-quality AI image using Pollinations.ai or a fallback."""
+    # Use higher resolution for better video quality
+    width, height = (1920, 1080) if aspect_ratio == '16:9' else (1080, 1920)
 
     # 1. Try Pollinations.ai
     try:
@@ -61,7 +75,7 @@ def generate_ai_image(output_path, prompt, aspect_ratio='16:9'):
 
 def generate_mock_image(output_path, text, aspect_ratio='16:9'):
     # Sanitize text for FFmpeg drawtext filter
-    width, height = (1280, 720) if aspect_ratio == '16:9' else (720, 1280)
+    width, height = (1920, 1080) if aspect_ratio == '16:9' else (1080, 1920)
     safe_text = text.replace("'", "").replace(":", "").replace("\\", "")
     command = [
         FFMPEG_PATH, '-y', '-f', 'lavfi', '-i', f'color=c=blue:s={width}x{height}:d=1',
@@ -74,9 +88,10 @@ def generate_mock_image(output_path, text, aspect_ratio='16:9'):
             f.write("mock image content")
 
 def generate_tts_audio(output_path, text, style='story'):
-    """Generates human-like audio using Microsoft Edge TTS."""
-    # Path to the edge-tts executable in our venv
-    edge_tts_path = os.path.join(os.path.dirname(__file__), 'venv', 'bin', 'edge-tts')
+    """Generates high-quality human-like audio using Microsoft Edge TTS."""
+    # Try to find edge-tts in PATH, then fallback to local venv
+    local_venv_edge = os.path.join(os.path.dirname(__file__), 'venv', 'bin', 'edge-tts')
+    edge_tts_path = get_executable_path('edge-tts', local_venv_edge)
 
     # We'll use a high-quality neural voice
     # Default: en-US-AndrewNeural (natural male)
@@ -92,48 +107,68 @@ def generate_tts_audio(output_path, text, style='story'):
     elif style == 'trade_wave':
         voice = "en-US-ChristopherNeural"
 
+    # Generate high-quality audio (48kHz stereo for better sound)
+    temp_audio = output_path.replace('.mp3', '_temp.mp3')
     command = [
         edge_tts_path,
         '--text', text,
-        '--write-media', output_path,
+        '--write-media', temp_audio,
         '--voice', voice
     ]
 
-    print(f"DEBUG: Generating human-like voice with edge-tts: {voice} for style {style}", file=sys.stderr)
+    print(f"DEBUG: Generating high-quality voice with edge-tts: {voice} for style {style}", file=sys.stderr)
 
-    if not run_command(command):
-        # Fallback to macOS 'say' if edge-tts fails
+    if run_command(command):
+        # Convert to high-quality MP3 with better settings
+        # -ar 48000: 48kHz sample rate (DVD/YouTube quality)
+        # -b:a 192k: 192kbps bitrate (high quality)
+        # -q:a 2: VBR quality 0-9, where 0 is best (approx 190-250kbps)
+        convert_cmd = [
+            FFMPEG_PATH, '-y', '-i', temp_audio,
+            '-ar', '48000',  # Higher sample rate for better audio quality
+            '-ac', '2',      # Stereo
+            '-q:a', '2',     # High quality VBR (approx 190-250 kbps)
+            output_path
+        ]
+        if run_command(convert_cmd):
+            os.remove(temp_audio)
+            return
+
+    # Fallback to macOS 'say' if edge-tts fails (only on macOS)
+    if sys.platform == 'darwin':
         print(f"Warning: edge-tts failed. Falling back to macOS 'say'.", file=sys.stderr)
         temp_aiff = output_path.replace('.mp3', '.aiff')
         say_command = ['say', text, '-o', temp_aiff]
         if run_command(say_command):
             convert_command = [
                 FFMPEG_PATH, '-y', '-i', temp_aiff,
+                '-ar', '48000',
+                '-ac', '2',
                 '-codec:a', 'libmp3lame', '-qscale:a', '2',
                 output_path
             ]
             run_command(convert_command)
             if os.path.exists(temp_aiff):
                 os.remove(temp_aiff)
-        else:
-            # Final fallback to silence
-            command_silence = [
-                FFMPEG_PATH, '-y', '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',
-                '-t', '5', output_path
-            ]
-            run_command(command_silence)
+            return
+
+    # Final fallback to silence for both Linux and macOS if everything else fails
+    print(f"Warning: TTS failed. Falling back to silence.", file=sys.stderr)
+    command_silence = [
+        FFMPEG_PATH, '-y', '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo',
+        '-t', '5', output_path
+    ]
+    run_command(command_silence)
 
 def create_scene_video(image_path, audio_path, output_path, narration, scene_index=0, aspect_ratio='16:9'):
-    # Get audio duration to match video length
-    width, height = (1280, 720) if aspect_ratio == '16:9' else (720, 1280)
+    """Creates high-quality video with smooth zoom animation and enhanced subtitles."""
+    # Use higher resolution for better quality
+    width, height = (1920, 1080) if aspect_ratio == '16:9' else (1080, 1920)
 
     command_duration = [
-        'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+        FFPROBE_PATH, '-v', 'error', '-show_entries', 'format=duration',
         '-of', 'default=noprint_wrappers=1:nokey=1', audio_path
     ]
-    # Replace 'ffprobe' with absolute path if needed
-    if command_duration[0] == 'ffprobe':
-        command_duration[0] = FFMPEG_PATH.replace('ffmpeg', 'ffprobe')
 
     try:
         result = subprocess.run(command_duration, capture_output=True, text=True)
@@ -144,89 +179,109 @@ def create_scene_video(image_path, audio_path, output_path, narration, scene_ind
     # Ensure duration is at least 1 second
     duration = max(duration, 1.0)
 
-    # Calculate frames (25 fps)
-    total_frames = int(duration * 25)
+    # Use higher fps for smoother animation (30 fps instead of 25)
+    fps = 30
+    total_frames = int(duration * fps)
 
-    # Alternate zoom effects based on scene index
+    # Alternate zoom effects based on scene index (slower, smoother zoom)
     if scene_index % 2 == 0:
-        # Zoom in
-        zoom_expr = "min(zoom+0.0015,1.5)"
+        # Slower zoom in for smoother effect
+        zoom_expr = "min(zoom+0.001,1.3)"
     else:
-        # Zoom out (start at 1.5 and go down)
-        zoom_expr = "max(1.5-0.0015*on,1.0)"
+        # Slower zoom out for smoother effect
+        zoom_expr = "max(1.3-0.001*on,1.0)"
 
-    # Subtitles logic: split long text into lines based on aspect ratio
-    line_limit = 25 if aspect_ratio == '9:16' else 45
+    # Professional Subtitles: Word-by-word / Small chunks centered
+    narration = re.sub(r'\s+', ' ', narration).strip()
     words = narration.split()
-    lines = []
-    current_line = []
-    for word in words:
-        current_line.append(word)
-        if len(" ".join(current_line)) > line_limit:
-            lines.append(" ".join(current_line))
-            current_line = []
-    if current_line:
-        lines.append(" ".join(current_line))
+    total_words = len(words)
 
-    # Sanitize narration and write to a temporary file for FFmpeg to read
-    # We use a strict regex to keep ONLY letters, numbers, and spaces.
-    # This is the most aggressive fix to remove invisible control characters or trailing markers.
-    clean_lines = []
-    for line in lines:
-        # Keep only alphanumeric and basic spaces, then strip trailing/leading whitespace
-        clean_line = re.sub(r'[^a-zA-Z0-9\s]', '', line).strip()
-        if clean_line:
-            clean_lines.append(clean_line)
-
-    text_file_path = output_path + ".txt"
-    # Write as simple ASCII, ignoring any character that can't be represented
-    with open(text_file_path, 'w', encoding='ascii', errors='ignore') as f:
-        f.write("\n".join(clean_lines))
-
-    # Adjust font size and position for vertical videos (Shorts/TikTok)
-    font_size = 36 if aspect_ratio == '16:9' else 42
-    y_pos = "h-120" if aspect_ratio == '16:9' else "h-300" # Higher for shorts to avoid UI
-
-    # Cross-platform font detection
-    # We look for common high-quality fonts on both macOS and Linux
+    # Cross-platform font detection - prefer bold fonts
     possible_fonts = [
-        "/System/Library/Fonts/Helvetica.ttc",          # macOS
-        "/System/Library/Fonts/Cache/Arial.ttf",       # macOS alternative
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", # Linux (Ubuntu/Debian)
-        "/usr/share/fonts/TTF/DejaVuSans.ttf",         # Linux (Arch/CentOS)
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", # Linux alternative
-        "Arial", # Fallback to system font name if path fails
+        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+        "/System/Library/Fonts/Helvetica.ttc",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
+        "Arial",
     ]
 
-    font_path = "Arial" # Default fallback
+    font_path = "Arial"
     for path in possible_fonts:
         if os.path.exists(path):
             font_path = path
             break
 
-    # Drawtext filter using the textfile parameter and an explicit font
-    # Simplified filter: white text with black border and shadow
-    subtitles_filter = (
-        f"drawtext=textfile='{text_file_path}':fontfile='{font_path}':"
-        f"fontcolor=white:fontsize={font_size}:borderw=1:bordercolor=black:"
-        f"shadowcolor=black@0.5:shadowx=2:shadowy=2:"
-        f"x=(w-text_w)/2:y={y_pos}"
-    )
+    if total_words == 0:
+        subtitles_filter = "identity" # No text
+    else:
+        # Calculate duration per word
+        duration_per_word = duration / total_words
 
-    # Pre-scale image to match target resolution and ensure it's compatible with zoompan
-    # zoompan is very sensitive to input resolution
+        # Group words into small chunks (1-2 words) for a professional "pop" look
+        chunks = []
+        chunk_size = 2 # Show 2 words at a time
+        for i in range(0, total_words, chunk_size):
+            chunk_words = words[i:i + chunk_size]
+            start_time = i * duration_per_word
+            # End time is when the next chunk starts, or end of video
+            end_time = min((i + chunk_size) * duration_per_word, duration)
+            chunks.append({
+                'text': " ".join(chunk_words), # Removed .upper() to keep punctuation and case as intended
+                'start': start_time,
+                'end': end_time
+            })
+
+        # Enhanced subtitle styling: Larger and more central
+        font_size = 70 if aspect_ratio == '16:9' else 90
+        # Position slightly below center for 9:16, or bottom for 16:9
+        y_pos = "(h-text_h)/2 + 200" if aspect_ratio == '9:16' else "h-120"
+
+        drawtext_filters = []
+        for chunk in chunks:
+            # For the text parameter in drawtext, we need to be extremely careful with single quotes.
+            # In FFmpeg's filter syntax, to get a literal ' inside a '...' string,
+            # you must use '\'' which actually means: end string, escaped quote, start string.
+            # However, when passed via Python's subprocess.run, additional layers of escaping are involved.
+
+            # The most reliable way to handle 't, 's, etc. in drawtext is to:
+            # use a very specific triple-backslash escaping for the single quote
+            # so that it survives both the Python string and the FFmpeg filter parsing.
+            safe_txt = chunk['text'].replace("'", "'\\\\\\''").replace(":", "\\:").replace(",", "\\,")
+            # Also need to handle potential newlines or other weirdness in the chunk
+            safe_txt = safe_txt.replace("\n", " ").replace("\r", "")
+
+            # Each chunk is a separate drawtext filter enabled only during its timeframe
+            dt = (
+                f"drawtext=text='{safe_txt}':fontfile='{font_path}':"
+                f"fontcolor=#FFFF00:fontsize={font_size}:borderw=5:bordercolor=black:"
+                f"shadowcolor=black@0.6:shadowx=3:shadowy=3:"
+                f"x=(w-text_w)/2:y={y_pos}:enable='between(t,{chunk['start']:.2f},{chunk['end']:.2f})'"
+            )
+            drawtext_filters.append(dt)
+
+        subtitles_filter = ",".join(drawtext_filters)
+
+    # High-quality video encoding settings:
     command = [
-        FFMPEG_PATH, '-y', '-loop', '1', '-i', image_path, '-i', audio_path,
-        '-vf', f"scale={width}:{height},zoompan=z='{zoom_expr}':d={total_frames}:s={width}x{height},{subtitles_filter},format=yuv420p",
-        '-c:v', 'libx264', '-t', str(duration), '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', output_path
+        FFMPEG_PATH, '-y',
+        '-loop', '1', '-i', image_path,
+        '-i', audio_path,
+        '-vf', f"scale={width}:{height}:flags=lanczos,zoompan=z='{zoom_expr}':d={total_frames}:s={width}x{height}:fps={fps},fps={fps},{subtitles_filter},format=yuv420p",
+        '-c:v', 'libx264',
+        '-preset', 'slow',
+        '-crf', '18',
+        '-tune', 'film',
+        '-t', str(duration),
+        '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        '-ar', '48000',
+        '-shortest',
+        output_path
     ]
     if not run_command(command):
         with open(output_path, 'w') as f:
             f.write("mock video content")
-
-    # Clean up the temporary subtitle file
-    if os.path.exists(text_file_path):
-        os.remove(text_file_path)
 
 def step2_voice_generation(output_path, text, style='story'):
     """Generates AI voice for the scene."""
@@ -237,7 +292,7 @@ def step3_video_generation(img_path, aud_path, vid_path, narration, scene_index,
     return create_scene_video(img_path, aud_path, vid_path, narration, scene_index, aspect_ratio)
 
 def step4_automatic_assembly(output_dir, scene_videos, background_music=None):
-    """Stitches all scenes into one final .mp4 and adds background music."""
+    """Stitches all scenes into one final .mp4 with high-quality audio and adds background music."""
     final_video_path = os.path.join(output_dir, "final_video.mp4")
     concat_file_path = os.path.join(output_dir, "concat.txt")
     temp_video_path = os.path.join(output_dir, "temp_merged.mp4")
@@ -256,12 +311,22 @@ def step4_automatic_assembly(output_dir, scene_videos, background_music=None):
 
     # Step 4.2: Add background music if provided
     if background_music and os.path.exists(background_music):
+        # Mix audio with high-quality settings
         # -stream_loop -1 loops the background music
-        # -filter_complex mixes audio: [1:a]volume=0.08 lowers background music, [0:a]volume=1.5 boosts narration
+        # -filter_complex mixes audio: [1:a]volume=0.10 lowers background music, [0:a]volume=1.5 boosts narration
         music_mix_command = [
-            FFMPEG_PATH, '-y', '-i', temp_video_path, '-stream_loop', '-1', '-i', background_music,
-            '-filter_complex', "[1:a]volume=0.08[bg];[0:a]volume=1.5[narr];[narr][bg]amix=inputs=2:duration=first[a]",
-            '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-shortest', final_video_path
+            FFMPEG_PATH, '-y',
+            '-i', temp_video_path,
+            '-stream_loop', '-1', '-i', background_music,
+            '-filter_complex', "[1:a]volume=0.10[bg];[0:a]volume=1.5[narr];[narr][bg]amix=inputs=2:duration=first[a]",
+            '-map', '0:v',
+            '-map', '[a]',
+            '-c:v', 'copy',
+            '-c:a', 'aac',
+            '-b:a', '192k',
+            '-ar', '48000',
+            '-shortest',
+            final_video_path
         ]
         if run_command(music_mix_command):
             if os.path.exists(temp_video_path):

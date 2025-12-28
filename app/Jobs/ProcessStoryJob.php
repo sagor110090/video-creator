@@ -31,6 +31,9 @@ class ProcessStoryJob implements ShouldQueue
             Log::info("STEP 1: Parsing story into storyboard for Story ID: {$this->story->id}");
             $storyboard = $this->parseStory($this->story->content);
 
+            // Clear existing scenes if any (idempotency)
+            $this->story->scenes()->delete();
+
             foreach ($storyboard as $index => $scene) {
                 $this->story->scenes()->create([
                     'order' => $index,
@@ -46,15 +49,18 @@ class ProcessStoryJob implements ShouldQueue
 
             $this->story->update(['status' => 'completed']);
 
-            // STEP 5: Auto-upload to YouTube/Facebook if configured
-            if ($this->story->youtube_token_id) {
-                Log::info("Dispatching YouTube upload job for Story ID: {$this->story->id}");
-                UploadToYouTubeJob::dispatch($this->story);
-            }
+            // STEP 5: Auto-upload only if generated via Scheduler
+            // Check if the story was created by the scheduler (it will have a user_id from the schedule but no manual trigger)
+            if ($this->story->is_from_scheduler) {
+                if ($this->story->youtube_token_id) {
+                    Log::info("Scheduler: Dispatching YouTube upload job for Story ID: {$this->story->id}");
+                    UploadToYouTubeJob::dispatch($this->story);
+                }
 
-            if ($this->story->facebook_page_id && $this->story->facebookPage) {
-                Log::info("Dispatching Facebook upload job for Story ID: {$this->story->id}");
-                UploadToFacebookJob::dispatch($this->story, $this->story->facebookPage);
+                if ($this->story->facebook_page_id && $this->story->facebookPage) {
+                    Log::info("Scheduler: Dispatching Facebook upload job for Story ID: {$this->story->id}");
+                    UploadToFacebookJob::dispatch($this->story, $this->story->facebookPage);
+                }
             }
         } catch (\Exception $e) {
             Log::error('Video processing failed: ' . $e->getMessage());
@@ -78,11 +84,11 @@ class ProcessStoryJob implements ShouldQueue
         $visualStyle = "Cinematic storybook illustration";
 
         if ($style === 'science_short') {
-            $visualStyle = "High-tech scientific visualization, 8k, detailed, space/lab setting";
+            $visualStyle = "High-tech scientific visualization, 8k, highly detailed, realistic lighting, vibrant colors, cinematic composition";
         } elseif ($style === 'hollywood_hype') {
-            $visualStyle = "Glossy celebrity news style, paparazzi lighting, red carpet atmosphere";
+            $visualStyle = "Glossy celebrity news style, high-end paparazzi lighting, vibrant red carpet atmosphere, professional photography, 8k";
         } elseif ($style === 'trade_wave') {
-            $visualStyle = "Professional financial news, trading charts background, modern office, clean aesthetic";
+            $visualStyle = "Professional financial news, trading charts background, modern office, clean minimalist aesthetic, high-resolution, sharp focus";
         }
 
         $storyboard = [];
@@ -92,7 +98,7 @@ class ProcessStoryJob implements ShouldQueue
 
             $storyboard[] = [
                 'narration' => $sentence,
-                'image_prompt' => "{$visualStyle} of: " . $sentence,
+                'image_prompt' => "{$visualStyle}, illustrating: " . $sentence . ". Cinematic, hyper-realistic, 8k resolution.",
             ];
         }
 
@@ -126,7 +132,24 @@ class ProcessStoryJob implements ShouldQueue
         }
 
         $jsonInput = json_encode($inputData);
-        $pythonPath = '/usr/bin/python3';
+
+        // Detect python3 path across platforms
+        $pythonPath = 'python3';
+        if (PHP_OS_FAMILY === 'Darwin') {
+            // Check common macOS locations
+            $macPaths = ['/opt/homebrew/bin/python3', '/usr/local/bin/python3'];
+            foreach ($macPaths as $path) {
+                if (file_exists($path)) {
+                    $pythonPath = $path;
+                    break;
+                }
+            }
+        } elseif (PHP_OS_FAMILY === 'Linux') {
+            if (file_exists('/usr/bin/python3')) {
+                $pythonPath = '/usr/bin/python3';
+            }
+        }
+
         $pythonScript = base_path('ai_worker/worker.py');
 
         $process = new Process([$pythonPath, $pythonScript, $jsonInput]);
@@ -145,9 +168,18 @@ class ProcessStoryJob implements ShouldQueue
         $output = json_decode($process->getOutput(), true);
 
         if (isset($output['video_path'])) {
-            $this->story->update([
-                'video_path' => str_replace(storage_path('app/public/'), '', $output['video_path'])
-            ]);
+            $fullPath = $output['video_path'];
+            $storagePrefix = storage_path('app/public/');
+
+            // Ensure we are saving the file path, not the directory path
+            if (is_file($fullPath)) {
+                $relativePath = str_replace($storagePrefix, '', $fullPath);
+                $this->story->update([
+                    'video_path' => $relativePath
+                ]);
+            } else {
+                throw new \Exception("AI Worker reported success but video file not found at: " . $fullPath);
+            }
         }
     }
 }

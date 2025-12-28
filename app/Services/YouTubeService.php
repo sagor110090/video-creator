@@ -125,13 +125,13 @@ class YouTubeService
 
             $videoPath = public_path('storage/' . $story->video_path);
 
-            if (!file_exists($videoPath)) {
-                // Try absolute path if not in storage/
+            if (!file_exists($videoPath) || is_dir($videoPath)) {
+                // Try absolute path if not in storage/ or if storage path is actually a directory
                 $videoPath = $story->video_path;
             }
 
-            if (!file_exists($videoPath)) {
-                throw new \Exception("Video file not found at: {$videoPath}");
+            if (!file_exists($videoPath) || is_dir($videoPath)) {
+                throw new \Exception("Video file not found or is a directory: {$videoPath}");
             }
 
             $chunkSizeBytes = 1 * 1024 * 1024;

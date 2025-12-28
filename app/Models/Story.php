@@ -27,19 +27,11 @@ class Story extends Model
         'facebook_video_id',
         'is_uploaded_to_facebook',
         'facebook_upload_status',
-        'facebook_error'
+        'facebook_error',
+        'is_from_scheduler',
     ];
 
     protected $with = ['youtubeChannel', 'facebookPage'];
-
-    protected static function booted()
-    {
-        static::created(function ($story) {
-            if ($story->status === 'pending') {
-                ProcessStoryJob::dispatch($story);
-            }
-        });
-    }
 
     public function scenes()
     {

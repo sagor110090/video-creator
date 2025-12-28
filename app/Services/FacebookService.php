@@ -29,8 +29,12 @@ class FacebookService
 
             $videoPath = public_path('storage/' . $story->video_path);
 
-            if (!file_exists($videoPath)) {
-                throw new \Exception("Video file not found at: {$videoPath}");
+            if (!file_exists($videoPath) || is_dir($videoPath)) {
+                $videoPath = $story->video_path;
+            }
+
+            if (!file_exists($videoPath) || is_dir($videoPath)) {
+                throw new \Exception("Video file not found or is a directory: {$videoPath}");
             }
 
             $fileSize = filesize($videoPath);
@@ -38,7 +42,7 @@ class FacebookService
 
             // Use cURL to upload directly to Facebook
             $endpoint = "https://graph-video.facebook.com/v18.0/{$page->page_id}/videos";
-            
+
             $data = [
                 'title' => $story->title ?: 'AI Generated Video',
                 'description' => $story->content,
@@ -55,7 +59,7 @@ class FacebookService
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_TIMEOUT, 0); // No timeout for large uploads
             curl_setopt($ch, CURLOPT_NOPROGRESS, false);
-            
+
             $response = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             $error = curl_error($ch);
@@ -71,7 +75,7 @@ class FacebookService
             }
 
             $result = json_decode($response, true);
-            
+
             if (!isset($result['id'])) {
                 Log::error("Facebook API response: " . $response);
                 throw new \Exception("Invalid response from Facebook: " . $response);

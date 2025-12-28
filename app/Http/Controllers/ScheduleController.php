@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Schedule;
 use App\Models\Story;
+use App\Jobs\ProcessStoryJob;
 use Illuminate\Http\Request;
 
 class ScheduleController extends Controller
@@ -49,7 +50,7 @@ class ScheduleController extends Controller
     public function show($id)
     {
         $schedule = Schedule::where('id', $id)->where('user_id', auth()->id())->firstOrFail();
-        
+
         return response()->json($schedule->load(['youtubeChannel', 'facebookPage']));
     }
 
@@ -98,7 +99,10 @@ class ScheduleController extends Controller
             'status' => 'pending',
             'youtube_token_id' => $schedule->youtube_token_id,
             'facebook_page_id' => $schedule->facebook_page_id,
+            'is_from_scheduler' => true,
         ]);
+
+        ProcessStoryJob::dispatch($story);
 
         return response()->json($story, 201);
     }

@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Schedule;
 use App\Models\Story;
+use App\Jobs\ProcessStoryJob;
 use App\Services\AiStoryService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -64,7 +65,10 @@ class ProcessSchedulesCommand extends Command
                         'youtube_tags' => $storyData['youtube_tags'],
                         'youtube_token_id' => $schedule->youtube_token_id,
                         'facebook_page_id' => $schedule->facebook_page_id,
+                        'is_from_scheduler' => true,
                     ]);
+
+                    ProcessStoryJob::dispatch($story);
 
                     $this->info("Created story #{$story->id} with full metadata");
                 } catch (\Exception $e) {
