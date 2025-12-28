@@ -8,6 +8,7 @@ use Illuminate\Foundation\Queue\Queueable;
 use App\Models\Story;
 use App\Models\Scene;
 use App\Jobs\UploadToYouTubeJob;
+use App\Jobs\UploadToFacebookJob;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\Process\Process;
@@ -16,6 +17,8 @@ use Symfony\Component\Process\Exception\ProcessFailedException;
 class ProcessStoryJob implements ShouldQueue
 {
     use Queueable;
+
+    public $timeout = 3600;
 
     public function __construct(public Story $story) {}
 
@@ -42,6 +45,17 @@ class ProcessStoryJob implements ShouldQueue
             Log::info("Workflow completed for Story ID: {$this->story->id}");
 
             $this->story->update(['status' => 'completed']);
+
+            // STEP 5: Auto-upload to YouTube/Facebook if configured
+            if ($this->story->youtube_token_id) {
+                Log::info("Dispatching YouTube upload job for Story ID: {$this->story->id}");
+                UploadToYouTubeJob::dispatch($this->story);
+            }
+
+            if ($this->story->facebook_page_id && $this->story->facebookPage) {
+                Log::info("Dispatching Facebook upload job for Story ID: {$this->story->id}");
+                UploadToFacebookJob::dispatch($this->story, $this->story->facebookPage);
+            }
         } catch (\Exception $e) {
             Log::error('Video processing failed: ' . $e->getMessage());
             $this->story->update(['status' => 'failed']);
@@ -112,7 +126,7 @@ class ProcessStoryJob implements ShouldQueue
         }
 
         $jsonInput = json_encode($inputData);
-        $pythonPath = base_path('ai_worker/venv/bin/python3');
+        $pythonPath = '/usr/bin/python3';
         $pythonScript = base_path('ai_worker/worker.py');
 
         $process = new Process([$pythonPath, $pythonScript, $jsonInput]);

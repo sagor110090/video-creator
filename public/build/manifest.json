@@ -1,6 +1,10 @@
 {
+  "_sweetalert2.esm.all-BQxta0Da.js": {
+    "file": "assets/sweetalert2.esm.all-BQxta0Da.js",
+    "name": "sweetalert2.esm.all"
+  },
   "resources/css/app.css": {
-    "file": "assets/app-DdqRJojD.css",
+    "file": "assets/app-zN0SumHD.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -8,25 +12,60 @@
       "app.css"
     ]
   },
+  "resources/js/Pages/Login.vue": {
+    "file": "assets/Login-C4_0ZtEs.js",
+    "name": "Login",
+    "src": "resources/js/Pages/Login.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/app.js"
+    ]
+  },
+  "resources/js/Pages/Schedules.vue": {
+    "file": "assets/Schedules-Dq-RotIO.js",
+    "name": "Schedules",
+    "src": "resources/js/Pages/Schedules.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/app.js",
+      "_sweetalert2.esm.all-BQxta0Da.js"
+    ]
+  },
+  "resources/js/Pages/Statistics.vue": {
+    "file": "assets/Statistics-7-ARmlnI.js",
+    "name": "Statistics",
+    "src": "resources/js/Pages/Statistics.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/app.js"
+    ]
+  },
   "resources/js/Pages/Welcome.vue": {
-    "file": "assets/Welcome-DBNyXVpW.js",
+    "file": "assets/Welcome-D27ZbOFK.js",
     "name": "Welcome",
     "src": "resources/js/Pages/Welcome.vue",
     "isDynamicEntry": true,
     "imports": [
-      "resources/js/app.js"
+      "resources/js/app.js",
+      "_sweetalert2.esm.all-BQxta0Da.js"
     ],
     "css": [
       "assets/Welcome-CLNrncva.css"
     ]
   },
   "resources/js/app.js": {
-    "file": "assets/app-fAwnr2zk.js",
+    "file": "assets/app-BINV0W-l.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
     "dynamicImports": [
+      "resources/js/Pages/Login.vue",
+      "resources/js/Pages/Schedules.vue",
+      "resources/js/Pages/Statistics.vue",
       "resources/js/Pages/Welcome.vue"
+    ],
+    "css": [
+      "assets/app-Zk98ypLp.css"
     ]
   }
 }

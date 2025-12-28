@@ -8,7 +8,7 @@ const props = defineProps({
     }
 });
 
-const emit = defineEmits(['regenerate', 'delete', 'upload']);
+const emit = defineEmits(['regenerate', 'delete', 'upload', 'upload-facebook']);
 const videoLoaded = ref(false);
 const isVisible = ref(false);
 const cardRef = ref(null);
@@ -57,6 +57,22 @@ const formatDate = (dateString) => {
         Math.ceil((date - new Date()) / (1000 * 60 * 60 * 24)),
         'day'
     );
+};
+
+const formatProcessingTime = (story) => {
+    if (story.status !== 'completed' || !story.created_at || !story.updated_at) return null;
+    
+    const created = new Date(story.created_at);
+    const updated = new Date(story.updated_at);
+    const durationMs = updated - created;
+    
+    const minutes = Math.floor(durationMs / 60000);
+    const seconds = Math.floor((durationMs % 60000) / 1000);
+    
+    if (minutes > 0) {
+        return `${minutes}m ${seconds}s`;
+    }
+    return `${seconds}s`;
 };
 </script>
 
@@ -140,38 +156,66 @@ const formatDate = (dateString) => {
                 <!-- Actions for Completed -->
                 <div v-if="story.status === 'completed'" class="space-y-3">
                     <div class="flex items-center justify-between text-xs text-slate-400 dark:text-slate-500">
-                        <span>Created {{ formatDate(story.created_at) }}</span>
+                        <div class="flex items-center space-x-2">
+                            <span>Created {{ formatDate(story.created_at) }}</span>
+                            <span v-if="formatProcessingTime(story)" class="text-emerald-500 font-medium">• Generated in {{ formatProcessingTime(story) }}</span>
+                        </div>
                         <span class="font-bold text-slate-600 dark:text-slate-400 uppercase">{{ story.aspect_ratio }}</span>
                     </div>
 
                     <div class="grid grid-cols-2 gap-2">
                         <a :href="'/storage/' + story.video_path" download
-                           :class="story.youtube_upload_status === 'failed' ? 'col-span-1' : ''"
+                           :class="(story.youtube_upload_status === 'failed' || story.facebook_upload_status === 'failed') ? 'col-span-1' : ''"
                            class="flex items-center justify-center space-x-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold py-2 rounded-xl transition-all text-sm">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                             <span>Save</span>
                         </a>
 
+                        <!-- YouTube Upload Button -->
                         <button v-if="story.youtube_upload_status === 'failed'"
                                 @click="emit('upload', story)"
                                 class="col-span-1 flex items-center justify-center space-x-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-xl transition-all text-sm">
                             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-                            <span>Retry</span>
+                            <span>Retry YT</span>
                         </button>
 
                         <button v-else-if="!story.youtube_upload_status"
                                 @click="emit('upload', story)"
                                 class="flex items-center justify-center space-x-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-xl transition-all text-sm">
                             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-                            <span>Publish</span>
+                            <span>YouTube</span>
                         </button>
 
+                        <!-- Facebook Upload Button -->
+                        <button v-if="story.facebook_upload_status === 'failed'"
+                                @click="emit('upload-facebook', story)"
+                                class="col-span-1 flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-xl transition-all text-sm">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                            <span>Retry FB</span>
+                        </button>
+
+                        <button v-else-if="!story.facebook_upload_status"
+                                @click="emit('upload-facebook', story)"
+                                class="flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-xl transition-all text-sm">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                            <span>FB Reels</span>
+                        </button>
+
+                        <!-- YouTube Error -->
                         <div v-if="story.youtube_upload_status === 'failed' && story.youtube_error" class="col-span-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-lg">
                             <p class="text-[10px] text-red-600 dark:text-red-400 leading-tight">
-                                <span class="font-bold">Error:</span> {{ story.youtube_error }}
+                                <span class="font-bold">YT Error:</span> {{ story.youtube_error }}
                             </p>
                         </div>
 
+                        <!-- Facebook Error -->
+                        <div v-if="story.facebook_upload_status === 'failed' && story.facebook_error" class="col-span-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-lg">
+                            <p class="text-[10px] text-red-600 dark:text-red-400 leading-tight">
+                                <span class="font-bold">FB Error:</span> {{ story.facebook_error }}
+                            </p>
+                        </div>
+
+                        <!-- YouTube Status -->
                         <div v-if="story.youtube_upload_status && story.youtube_upload_status !== 'failed'" class="col-span-2">
                             <div v-if="story.youtube_upload_status === 'completed'" class="w-full flex items-center justify-between p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 rounded-xl border border-blue-100 dark:border-blue-900/30">
                                 <div class="flex items-center">
@@ -182,7 +226,23 @@ const formatDate = (dateString) => {
                             </div>
                             <div v-else-if="story.youtube_upload_status === 'uploading'" class="w-full flex items-center justify-center p-2 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 rounded-xl border border-yellow-100 dark:border-yellow-900/30">
                                 <svg class="animate-spin h-3 w-3 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                                <span class="text-[10px] font-bold">UPLOADING...</span>
+                                <span class="text-[10px] font-bold">UPLOADING TO YOUTUBE...</span>
+                            </div>
+                        </div>
+
+                        <!-- Facebook Status -->
+                        <div v-if="story.facebook_upload_status && story.facebook_upload_status !== 'failed'" class="col-span-2">
+                            <div v-if="story.facebook_upload_status === 'completed'" class="w-full flex items-center justify-between p-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 rounded-xl border border-indigo-100 dark:border-indigo-900/30">
+                                <div class="flex items-center">
+                                    <img v-if="story.facebook_page?.picture_url" :src="story.facebook_page.picture_url" class="w-5 h-5 rounded-full mr-2">
+                                    <div v-else class="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center mr-2 text-[8px] font-bold">{{ story.facebook_page?.name?.charAt(0) || 'F' }}</div>
+                                    <span class="text-[10px] font-bold">LIVE ON FB REELS</span>
+                                </div>
+                                <a :href="'https://facebook.com/' + story.facebook_video_id" target="_blank" class="text-[10px] underline font-bold">WATCH</a>
+                            </div>
+                            <div v-else-if="story.facebook_upload_status === 'uploading'" class="w-full flex items-center justify-center p-2 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 rounded-xl border border-yellow-100 dark:border-yellow-900/30">
+                                <svg class="animate-spin h-3 w-3 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                <span class="text-[10px] font-bold">UPLOADING TO FB REELS...</span>
                             </div>
                         </div>
                     </div>

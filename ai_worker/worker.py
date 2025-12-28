@@ -8,7 +8,7 @@ import time
 import re
 
 # Set the absolute path to ffmpeg
-FFMPEG_PATH = '/opt/homebrew/bin/ffmpeg'
+FFMPEG_PATH = '/usr/bin/ffmpeg'
 
 def run_command(command):
     try:
@@ -311,8 +311,9 @@ def main():
     print(f"DEBUG: Assembling final video...", file=sys.stderr)
 
     # Check for background music in public/audio/background.mp3
-    # We assume the script is run from the project root
-    bg_music_path = os.path.join(os.getcwd(), 'public', 'audio', 'background.mp3')
+    # Use absolute path based on script location
+    script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    bg_music_path = os.path.join(script_dir, 'public', 'audio', 'background.mp3')
 
     final_video = step4_automatic_assembly(output_dir, scene_videos, bg_music_path)
 

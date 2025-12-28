@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Event;
+use App\Jobs\ProcessStoryJob;
 
 class Story extends Model
 {
@@ -20,8 +22,24 @@ class Story extends Model
         'is_uploaded_to_youtube',
         'youtube_upload_status',
         'youtube_token_id',
-        'youtube_error'
+        'youtube_error',
+        'facebook_page_id',
+        'facebook_video_id',
+        'is_uploaded_to_facebook',
+        'facebook_upload_status',
+        'facebook_error'
     ];
+
+    protected $with = ['youtubeChannel', 'facebookPage'];
+
+    protected static function booted()
+    {
+        static::created(function ($story) {
+            if ($story->status === 'pending') {
+                ProcessStoryJob::dispatch($story);
+            }
+        });
+    }
 
     public function scenes()
     {
@@ -31,5 +49,10 @@ class Story extends Model
     public function youtubeChannel()
     {
         return $this->belongsTo(YoutubeToken::class, 'youtube_token_id');
+    }
+
+    public function facebookPage()
+    {
+        return $this->belongsTo(FacebookPage::class, 'facebook_page_id');
     }
 }
