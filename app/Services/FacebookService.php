@@ -20,69 +20,91 @@ class FacebookService
         ]);
     }
 
-    public function uploadVideo(Story $story, FacebookPage $page)
+    public function uploadReel(Story $story, FacebookPage $page)
     {
         try {
             Log::info("Starting Facebook Reels upload for Story ID: {$story->id} to page: {$page->name}");
-
             $story->update(['facebook_upload_status' => 'uploading']);
 
             $videoPath = public_path('storage/' . $story->video_path);
-
             if (!file_exists($videoPath) || is_dir($videoPath)) {
                 $videoPath = $story->video_path;
             }
 
             if (!file_exists($videoPath) || is_dir($videoPath)) {
-                throw new \Exception("Video file not found or is a directory: {$videoPath}");
+                throw new \Exception("Video file not found: {$videoPath}");
             }
 
             $fileSize = filesize($videoPath);
-            Log::info("Video file: {$videoPath}, Size: {$fileSize} bytes");
+            $accessToken = $page->access_token;
+            $pageId = $page->page_id;
 
-            // Use cURL to upload directly to Facebook
-            $endpoint = "https://graph-video.facebook.com/v18.0/{$page->page_id}/videos";
-
-            $data = [
-                'title' => $story->title ?: 'AI Generated Video',
-                'description' => $story->content,
-                'access_token' => $page->access_token,
-                'source' => new \CURLFile($videoPath, 'video/mp4', basename($videoPath)),
+            // Step 1: Initialize the Reels upload session
+            Log::info("Step 1: Initializing Reels upload session");
+            $initUrl = "https://graph.facebook.com/v18.0/{$pageId}/video_reels";
+            $initData = [
+                'upload_phase' => 'start',
+                'access_token' => $accessToken
             ];
 
-            Log::info("Posting to Facebook endpoint: {$endpoint}");
-
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $endpoint);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+            $ch = curl_init($initUrl);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 0); // No timeout for large uploads
-            curl_setopt($ch, CURLOPT_NOPROGRESS, false);
-
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $initData);
             $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $error = curl_error($ch);
+            $initResult = json_decode($response, true);
             curl_close($ch);
 
-            if ($error) {
-                throw new \Exception("cURL Error: {$error}");
+            if (!isset($initResult['video_id']) || !isset($initResult['upload_url'])) {
+                throw new \Exception("Failed to initialize Reels upload: " . $response);
             }
 
-            if ($httpCode !== 200) {
-                Log::error("Facebook API HTTP {$httpCode}: {$response}");
-                throw new \Exception("Facebook API returned HTTP {$httpCode}: {$response}");
+            $videoId = $initResult['video_id'];
+            $uploadUrl = $initResult['upload_url'];
+
+            // Step 2: Upload the video binary
+            Log::info("Step 2: Uploading video binary to: {$uploadUrl}");
+            $videoData = file_get_contents($videoPath);
+            $ch = curl_init($uploadUrl);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                "Authorization: OAuth {$accessToken}",
+                "offset: 0",
+                "file_size: {$fileSize}",
+                "Content-Type: application/octet-stream"
+            ]);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $videoData);
+            $response = curl_exec($ch);
+            $uploadResult = json_decode($response, true);
+            curl_close($ch);
+
+            if (!isset($uploadResult['success']) || $uploadResult['success'] !== true) {
+                throw new \Exception("Failed to upload video binary: " . $response);
             }
 
-            $result = json_decode($response, true);
+            // Step 3: Finish and Publish the Reel
+            Log::info("Step 3: Finishing Reels upload and publishing");
+            $finishUrl = "https://graph.facebook.com/v18.0/{$pageId}/video_reels";
+            $finishData = [
+                'upload_phase' => 'finish',
+                'access_token' => $accessToken,
+                'video_id' => $videoId,
+                'video_state' => 'PUBLISHED',
+                'description' => $story->title . "\n\n" . $story->content
+            ];
 
-            if (!isset($result['id'])) {
-                Log::error("Facebook API response: " . $response);
-                throw new \Exception("Invalid response from Facebook: " . $response);
+            $ch = curl_init($finishUrl);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $finishData);
+            $response = curl_exec($ch);
+            $finishResult = json_decode($response, true);
+            curl_close($ch);
+
+            if (!isset($finishResult['success']) || $finishResult['success'] !== true) {
+                throw new \Exception("Failed to publish Reel: " . $response);
             }
 
-            $videoId = $result['id'];
-            Log::info("Facebook video upload successful for Story ID: {$story->id}. Video ID: {$videoId}");
+            Log::info("Facebook Reel upload successful for Story ID: {$story->id}. Video ID: {$videoId}");
 
             $story->update([
                 'facebook_video_id' => $videoId,
@@ -93,15 +115,18 @@ class FacebookService
             return $videoId;
 
         } catch (\Exception $e) {
-            Log::error("Facebook upload failed for Story ID: {$story->id}: " . $e->getMessage());
-            Log::error("Exception trace: " . $e->getTraceAsString());
-
+            Log::error("Facebook Reel upload failed: " . $e->getMessage());
             $story->update([
                 'facebook_upload_status' => 'failed',
                 'facebook_error' => $e->getMessage()
             ]);
-
             throw $e;
         }
+    }
+
+    public function uploadVideo(Story $story, FacebookPage $page)
+    {
+        // Redirect all video uploads to Reels as requested by the user
+        return $this->uploadReel($story, $page);
     }
 }

@@ -22,11 +22,11 @@ class UploadToFacebookJob implements ShouldQueue
     public function handle(FacebookService $facebookService): void
     {
         try {
-            Log::info("Starting Facebook upload for Story ID: {$this->story->id}");
+            Log::info("Starting Facebook Reels upload for Story ID: {$this->story->id}");
             
             $this->story->update(['facebook_upload_status' => 'uploading']);
             
-            $videoId = $facebookService->uploadVideo($this->story, $this->page);
+            $videoId = $facebookService->uploadReel($this->story, $this->page);
             
             Log::info("Facebook upload successful for Story ID: {$this->story->id}. Video ID: {$videoId}");
             
