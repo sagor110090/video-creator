@@ -31,13 +31,32 @@ class AiStoryService
         }
     }
 
-    public function generateTopic(string $channelContext): string
+    public function generateTopic(string $channelContext, string $style = 'story'): string
     {
-        $prompt = "Based on this YouTube channel description, generate ONE specific, mind-blowing science topic for a 60-second video.
-        Only return the topic name, nothing else.
+        $stylePrompts = [
+            'science_short' => "Generate ONE specific, high-interest science or technology topic.
+            - Focus on: Astrophysics, Quantum Physics, Deep Sea, AI, or Future Tech.
+            - Examples: 'The James Webb Space Telescope', 'Quantum Entanglement', 'Mariana Trench Secrets'.
+            - Return ONLY the topic name (2-5 words). No punctuation.",
 
-        Channel Context:
-        {$channelContext}";
+            'hollywood_hype' => "Generate ONE trending Hollywood or Celebrity topic.
+            - Focus on: A-list stars, major movie releases, or viral pop culture moments.
+            - Examples: 'Dakota Johnson Movie Rumors', 'Oscars Best Picture Controversy', 'Celebrity Fashion Trends'.
+            - Return ONLY the topic name (2-5 words). No punctuation.",
+
+            'trade_wave' => "Generate ONE high-impact Trading or Finance topic.
+            - Focus on: Bitcoin/Crypto, S&P 500, Tech Stocks, or Global Economy.
+            - Examples: 'Bitcoin Spot ETF Impact', 'AI Stock Market Rally', 'Interest Rate Decisions'.
+            - Return ONLY the topic name (2-5 words). No punctuation.",
+
+            'story' => "Generate ONE intriguing story concept.
+            - Focus on: Mystery, Adventure, Sci-Fi, or Historical Secret.
+            - Examples: 'The Lost City of Z', 'Time Travel Paradox', 'The Whispering Woods'.
+            - Return ONLY the topic name (2-5 words). No punctuation."
+        ];
+
+        $prompt = $stylePrompts[$style] ?? $stylePrompts['story'];
+        $prompt .= "\n\nChannel Context: {$channelContext}";
 
         try {
             $response = Http::withHeaders([
@@ -46,133 +65,199 @@ class AiStoryService
             ])->post($this->baseUrl, [
                 'model' => $this->model,
                 'messages' => [
-                    ['role' => 'system', 'content' => 'You are a creative YouTube content strategist.'],
+                    ['role' => 'system', 'content' => 'You are a content researcher. Output ONLY the topic name.'],
                     ['role' => 'user', 'content' => $prompt]
                 ],
-                'temperature' => 0.9,
+                'temperature' => 0.7,
             ]);
 
-            if ($response->failed()) {
-                throw new \Exception("Failed to generate topic");
-            }
+            if ($response->failed()) throw new \Exception("Topic generation failed");
 
             $data = $response->json();
             return trim($data['choices'][0]['message']['content'], '" ');
         } catch (\Exception $e) {
             Log::error('Topic generation failed: ' . $e->getMessage());
-            return "Black holes and the event horizon"; // Fallback
+            $fallbacks = [
+                'science_short' => 'Black Holes',
+                'hollywood_hype' => 'Celebrity News',
+                'trade_wave' => 'Bitcoin Update',
+                'story' => 'The Hidden Library'
+            ];
+            return $fallbacks[$style] ?? 'Interesting Story';
         }
     }
 
-    public function generateStory(string $topic = null, string $style = 'science_short'): array
+    public function generateStory(string $topic = null, string $style = 'story', string $aspectRatio = '16:9'): array
     {
-        // Add more variability to the system prompt
-        $randomStyles = ['cinematic', 'educational', 'thrilling', 'curious', 'mind-blowing', 'scientific', 'narrative'];
-        $selectedStyle = $randomStyles[array_rand($randomStyles)];
+        $isShorts = $aspectRatio === '9:16';
 
-        if ($style === 'science_short') {
-            $prompt = "Write a fast-paced, {$selectedStyle} science script for a 60-second YouTube Short.
-            The script should be approximately 130-150 words to fit within 60 seconds when spoken.
-            Use a 'hook -> explanation -> mind-blowing fact' structure.
-            The tone should be enthusiastic, professional, and easy to understand.";
-        } elseif ($style === 'hollywood_hype') {
-            $prompt = "Write a gossipy, high-energy, and {$selectedStyle} Hollywood news script for a 60-second YouTube Short.
-            Focus on the latest celebrity news, specifically regarding stars like Dakota Johnson or Jamie Dornan if mentioned.
-            The script should be approximately 130-150 words.
-            Use a 'shocking hook -> juicy details -> call to action' structure.
-            The tone should be dramatic, exciting, and viral-ready.";
-        } elseif ($style === 'trade_wave') {
-            $prompt = "Write a professional, high-stakes, and {$selectedStyle} trading and investment script for a 60-second YouTube Short.
-            Focus on market updates, crypto trends, stock analysis, or investment ideas.
-            The script should be approximately 130-150 words.
-            Use a 'market hook -> data analysis -> investment insight' structure.
-            The tone should be authoritative, urgent, and insightful.";
-        } else {
-            $prompt = "Write a short, engaging, and {$selectedStyle} story that would make a 2.5 minute video.
-            The story should be approximately 350-400 words.
-            Focus on vivid descriptions and a clear narrative arc (beginning, middle, end).";
-        }
+        // Define word counts and durations based on format
+        $wordCountRange = $isShorts ? '140-160' : '500-600';
+        $duration = $isShorts ? '60-second vertical Short' : '3-4 minute landscape video';
 
-        if ($topic) {
-            $prompt .= " The topic is: {$topic}.";
-        } else {
-            $scienceTopics = [
-                "The secret life of mushrooms and their fungal network",
-                "How time dilation works near a black hole",
-                "The possibility of life on Europa, Jupiter's moon",
-                "Quantum entanglement explained simply",
-                "The engineering marvel of the James Webb Space Telescope",
-                "Why the ocean is still 95% unexplored",
-                "The future of CRISPR and gene editing",
-                "How bees communicate through the waggle dance",
-                "The mystery of dark matter in the universe",
-                "How the human brain stores memories",
-                "The physics of a supernova",
-                "Can we survive on Mars?",
-                "The hidden world of tardigrades",
-                "How artificial intelligence is evolving",
-                "The science of dreams"
-            ];
-            $hypeTopics = [
-                "Dakota Johnson's latest red carpet look that has everyone talking",
-                "Is Jamie Dornan returning for a new thriller?",
-                "The Fifty Shades reunion fans are waiting for",
-                "Dakota Johnson's secret to her flawless style",
-                "Jamie Dornan's transition from model to superstar",
-                "The most expensive celebrity homes in Hollywood",
-                "Upcoming blockbuster movies in 2026",
-                "Celebrity fashion trends that are taking over",
-                "The truth behind the latest Hollywood rumors",
-                "How stars prepare for the Oscars"
-            ];
-            $tradeTopics = [
-                "Bitcoin's latest price surge and what it means for 2026",
-                "The top 3 AI stocks to watch this month",
-                "How the Federal Reserve's next move will impact your portfolio",
-                "The rise of decentralized finance and its future",
-                "Why gold is still the ultimate hedge in a volatile market",
-                "Understanding the 'fear and greed' index in crypto",
-                "The impact of global trade shifts on emerging markets",
-                "Why dividend investing is making a massive comeback",
-                "The truth about day trading vs long-term hodling",
-                "How to spot the next big tech unicorn before the IPO"
+        // Add a "Random Perspective" to ensure uniqueness for YouTube monetization
+        $perspectives = [
+            "Focus on the hidden secrets and unknown facts that most people miss.",
+            "Analyze the future implications and what this means for the next generation.",
+            "Tell it from the perspective of an expert insider with behind-the-scenes knowledge.",
+            "Make it slightly controversial and challenge the popular mainstream opinion.",
+            "Focus on the emotional human impact and personal stories related to this.",
+            "Break it down for a complete beginner using simple but powerful analogies."
+        ];
+        $randomPerspective = $perspectives[array_rand($perspectives)];
+
+        $stylePrompts = [
+            'science_short' => [
+                'name' => '60s Lab',
+                'instruction' => "Write a fast-paced, mind-blowing science script for a {$duration}. {$randomPerspective}
+                - Word count: {$wordCountRange} words.
+                - Start with a hook that challenges common knowledge.
+                - Use 'Did you know...' or 'Imagine if...'
+                - Explain complex concepts using simple, punchy analogies.
+                - End with a thought-provoking question about the future.",
+                'structure' => "Hook -> The Mystery -> The Science -> The 'Wow' Factor -> Future Question",
+            ],
+            'hollywood_hype' => [
+                'name' => 'Hollywood',
+                'instruction' => "Write a high-energy, 'spilling the tea' celebrity news script for a {$duration}. {$randomPerspective}
+                - Word count: {$wordCountRange} words.
+                - Start with 'Okay, we NEED to talk about...' or 'Y'all, did you see this?'
+                - Use internet slang naturally (tea, shook, living for it, iconic).
+                - Make it feel like a FaceTime call with a best friend.
+                - Focus on specific details, fan reactions, and rumors.
+                - End with 'What do you guys think? Let me know in the comments!'",
+                'structure' => "Breaking News -> The Juicy Details -> Fan Reactions -> Your Hot Take -> Engagement",
+            ],
+            'trade_wave' => [
+                'name' => 'TradeWave',
+                'instruction' => "Write a sharp, professional yet accessible market analysis script for a {$duration}. {$randomPerspective}
+                - Word count: {$wordCountRange} words.
+                - Start with 'The markets are moving, and here's why...'
+                - Use trader terminology (bullish, resistance, liquidity, breakout) but explain it simply.
+                - Provide actionable insights or things to watch.
+                - Mention specific tickers or coins if relevant.
+                - End with a disclaimer and a call to watch the charts.",
+                'structure' => "Market State -> Key Data/Chart Pattern -> Why it Matters -> What to Watch -> Disclaimer",
+            ],
+            'story' => [
+                'name' => 'General Story',
+                'instruction' => "Write a compelling, immersive narrative script for a {$duration}. {$randomPerspective}
+                - Word count: {$wordCountRange} words.
+                - Start in the middle of the action.
+                - Use vivid sensory details (smell, sound, feeling).
+                - Build tension and have a clear emotional payoff.
+                - Use natural, conversational storytelling like you're around a campfire.
+                - End with a thought-provoking resolution.",
+                'structure' => "The Hook -> Building Tension -> The Climax -> The Twist/Reveal -> Resolution",
+            ]
+        ];
+
+        $currentStyle = $stylePrompts[$style] ?? $stylePrompts['story'];
+        $channelName = $currentStyle['name'];
+
+        $prompt = "You are a master scriptwriter for YouTube. Write a script for a {$duration} about: '{$topic}'.
+
+        STYLE: {$channelName}
+        INSTRUCTIONS:
+        {$currentStyle['instruction']}
+
+        STRUCTURE:
+        {$currentStyle['structure']}
+
+        THE '70 RULE' FOR YPP APPROVAL (CRITICAL):
+        - UNIQUE ANGLE: Do not just state facts. Include a strong personal opinion, a witty joke, or a non-mainstream theory related to the topic.
+        - HUMAN PROOF: At least once in the script, include a 'Researcher's Insight' phrase like: \"When I was researching this for {$channelName}, I was actually shocked to find...\" or \"I spent hours digging into this, and the thing that really got me was...\" or \"In my opinion, this is exactly why...\". This proves a human did the research.
+        - PERSONALITY: Inject a distinct 'creator' personality. Use phrases like \"Trust me on this,\" or \"I know what you're thinking, but hear me out.\"
+
+        CRITICAL RULES FOR HUMAN-LIKE WRITING:
+        - TONE: 100% human-like. Use contractions (it's, can't, won't).
+        - VOCABULARY: Use simple, everyday words. Avoid complex AI-sounding words like 'delve', 'unleash', 'uncover', 'comprehensive', 'testament', 'vibrant', 'embark'.
+        - NO ROBOT TALK: NEVER use phrases like 'In this video', 'Welcome back', 'Let's dive in', 'Today we are going to', 'In conclusion', 'Furthermore', 'Moreover'.
+        - AUTHENTICITY: Write as if you're speaking to a friend. Use occasional filler words like 'so', 'actually', 'you see', 'the thing is'.
+        - VARIATION: Vary sentence length. Some short. Some a bit longer. Use fragments for emphasis.
+        - LENGTH: EXACTLY {$wordCountRange} words. Do not be shorter or longer.
+        - FORMAT: Conversational, rhythmic, and engaging.
+
+        Topic: {$topic}
+
+        Format your response as a JSON object:
+        {
+          \"title\": \"A short, punchy 3-5 word title\",
+          \"content\": \"The full script text here...\",
+          \"youtube_title\": \"A viral, click-worthy YouTube title\",
+          \"youtube_description\": \"A description with a summary and hashtags\",
+          \"youtube_tags\": \"15 relevant tags separated by commas\"
+        }";
+
+        try {
+            $systemMessage = "You are an expert human content creator. You write scripts that sound exactly like a real person talking, not an AI.
+            Your writing is authentic, conversational, and completely avoids all AI tropes, clichés, and overused AI vocabulary.
+            You use natural speech patterns, contractions, and a relaxed, engaging tone.
+            You always output valid JSON.";
+
+            $payload = [
+                'model' => $this->model,
+                'messages' => [
+                    ['role' => 'system', 'content' => $systemMessage],
+                    ['role' => 'user', 'content' => $prompt]
+                ],
+                'temperature' => 0.85,
             ];
 
-            if ($style === 'hollywood_hype') {
-                $randomTopic = $hypeTopics[array_rand($hypeTopics)];
-            } elseif ($style === 'trade_wave') {
-                $randomTopic = $tradeTopics[array_rand($tradeTopics)];
-            } else {
-                $randomTopic = $scienceTopics[array_rand($scienceTopics)];
+            if ($this->provider === 'groq' || $this->provider === 'deepseek') {
+                $payload['response_format'] = ['type' => 'json_object'];
             }
 
-            $prompt .= " Choose an interesting and cinematic topic. You could talk about something like: {$randomTopic}. BUT DO NOT USE 'The Quantum Echo' as a title or theme.";
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $this->apiKey,
+                'Content-Type' => 'application/json',
+            ])->post($this->baseUrl, $payload);
+
+            if ($response->failed()) {
+                throw new \Exception("AI Generation failed: " . $response->body());
+            }
+
+            $data = $response->json();
+            $content = json_decode($data['choices'][0]['message']['content'], true);
+
+            return [
+                'title' => $content['title'] ?? $topic,
+                'content' => $content['content'] ?? '',
+                'youtube_title' => $content['youtube_title'] ?? $content['title'],
+                'youtube_description' => $content['youtube_description'] ?? '',
+                'youtube_tags' => $content['youtube_tags'] ?? '',
+                'provider' => $this->provider
+            ];
+        } catch (\Exception $e) {
+            Log::error('AI Story Generation failed: ' . $e->getMessage());
+            throw $e;
         }
+    }
 
-        $wordCount = ($style === 'science_short' || $style === 'hollywood_hype' || $style === 'trade_wave') ? '130-150 words' : '350-400 words';
+    public function generateMetadata(string $content): array
+    {
+        $prompt = "Generate viral YouTube metadata for the following video script.
 
-        $prompt .= "\n\nFormat your response as a JSON object with the following fields:
-        'title': A short catchy title for the story. MUST NOT BE 'The Quantum Echo'.
-        'content': The full story text ({$wordCount}).
-        'youtube_title': A viral-style YouTube title (max 100 chars).
-        'youtube_description': A professional YouTube description including a summary and hashtags.
-        'youtube_tags': A comma-separated string of 10-15 relevant keywords.
+        SCRIPT:
+        {$content}
 
-        Unique Seed: " . bin2hex(random_bytes(16)) . "
-        Current Microtime: " . microtime(true);
+        IMPORTANT FOR MONETIZATION:
+        - Include a professional AI Disclosure in the description (e.g., 'This video features AI-enhanced narration and visuals to bring you a more immersive experience.').
+        - Ensure the title is click-worthy but not 'clickbait' that violates YouTube policies.
+
+        Format your response as a JSON object:
+        {
+          \"youtube_title\": \"A viral, click-worthy YouTube title\",
+          \"youtube_description\": \"A description with a summary, hashtags, and the required AI disclosure\",
+          \"youtube_tags\": \"15 relevant tags separated by commas\"
+        }";
 
         try {
             $payload = [
                 'model' => $this->model,
                 'messages' => [
-                    [
-                        'role' => 'system',
-                        'content' => 'You are a professional screenwriter and storyteller. You always output valid JSON. Be creative and unique with every response.'
-                    ],
-                    [
-                        'role' => 'user',
-                        'content' => $prompt . "\n\nIMPORTANT: Ensure this content is completely different from any previous generations. Explore a unique angle or a surprising fact."
-                    ]
+                    ['role' => 'system', 'content' => 'You are a YouTube SEO expert. Output ONLY valid JSON.'],
+                    ['role' => 'user', 'content' => $prompt]
                 ],
                 'temperature' => 0.7,
             ];
@@ -186,34 +271,17 @@ class AiStoryService
                 'Content-Type' => 'application/json',
             ])->post($this->baseUrl, $payload);
 
-            if ($response->failed()) {
-                Log::error("{$this->provider} API error: " . $response->body());
-                throw new \Exception("Failed to generate story from {$this->provider}");
-            }
+            if ($response->failed()) throw new \Exception("Metadata generation failed");
 
             $data = $response->json();
-            $rawContent = $data['choices'][0]['message']['content'];
-
-            // Clean up potential markdown code blocks if the AI includes them
-            $cleanContent = preg_replace('/^```json\s*|\s*```$/', '', trim($rawContent));
-            $content = json_decode($cleanContent, true);
-
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                Log::error("Failed to decode JSON from {$this->provider}: " . $rawContent);
-                throw new \Exception("Invalid JSON response from AI");
-            }
-
-            return [
-                'title' => $content['title'] ?? 'Generated Story',
-                'content' => $content['content'] ?? '',
-                'youtube_title' => $content['youtube_title'] ?? '',
-                'youtube_description' => $content['youtube_description'] ?? '',
-                'youtube_tags' => $content['youtube_tags'] ?? '',
-                'provider' => $this->provider
-            ];
+            return json_decode($data['choices'][0]['message']['content'], true);
         } catch (\Exception $e) {
-            Log::error('AI Story Generation failed: ' . $e->getMessage());
-            throw $e;
+            Log::error('Metadata generation failed: ' . $e->getMessage());
+            return [
+                'youtube_title' => 'Amazing Story',
+                'youtube_description' => 'Check out this amazing AI-generated story!',
+                'youtube_tags' => 'ai, story, animation'
+            ];
         }
     }
 

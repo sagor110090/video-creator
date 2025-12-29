@@ -51,7 +51,7 @@ class ProcessSchedulesCommand extends Command
                 try {
                     $aiService = app(AiStoryService::class);
                     $topic = $schedule->prompt_template ?? null;
-                    $storyData = $aiService->generateStory($topic, $schedule->style);
+                    $storyData = $aiService->generateStory($topic, $schedule->style, $schedule->aspect_ratio ?? '16:9');
 
                     $story = Story::create([
                         'user_id' => $schedule->user_id,
