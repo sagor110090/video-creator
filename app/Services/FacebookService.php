@@ -47,64 +47,17 @@ class FacebookService
                 'access_token' => $accessToken
             ];
 
-            $ch = curl_init($initUrl);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $initData);
-            $response = curl_exec($ch);
-            $initResult = json_decode($response, true);
-            curl_close($ch);
+            // Step 1: Initialize upload session
+            $videoId = $this->initializeUploadSession($page);
+            Log::info("Upload session initialized. Video ID: {$videoId}");
 
-            if (!isset($initResult['video_id']) || !isset($initResult['upload_url'])) {
-                throw new \Exception("Failed to initialize Reels upload: " . $response);
-            }
+            // Step 2: Upload the video file
+            $this->uploadVideoFile($videoId, $videoPath, $fileSize, $page->access_token);
+            Log::info("Video file uploaded successfully");
 
-            $videoId = $initResult['video_id'];
-            $uploadUrl = $initResult['upload_url'];
-
-            // Step 2: Upload the video binary
-            Log::info("Step 2: Uploading video binary to: {$uploadUrl}");
-            $videoData = file_get_contents($videoPath);
-            $ch = curl_init($uploadUrl);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                "Authorization: OAuth {$accessToken}",
-                "offset: 0",
-                "file_size: {$fileSize}",
-                "Content-Type: application/octet-stream"
-            ]);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $videoData);
-            $response = curl_exec($ch);
-            $uploadResult = json_decode($response, true);
-            curl_close($ch);
-
-            if (!isset($uploadResult['success']) || $uploadResult['success'] !== true) {
-                throw new \Exception("Failed to upload video binary: " . $response);
-            }
-
-            // Step 3: Finish and Publish the Reel
-            Log::info("Step 3: Finishing Reels upload and publishing");
-            $finishUrl = "https://graph.facebook.com/v18.0/{$pageId}/video_reels";
-            $finishData = [
-                'upload_phase' => 'finish',
-                'access_token' => $accessToken,
-                'video_id' => $videoId,
-                'video_state' => 'PUBLISHED',
-                'description' => $story->title . "\n\n" . $story->content
-            ];
-
-            $ch = curl_init($finishUrl);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $finishData);
-            $response = curl_exec($ch);
-            $finishResult = json_decode($response, true);
-            curl_close($ch);
-
-            if (!isset($finishResult['success']) || $finishResult['success'] !== true) {
-                throw new \Exception("Failed to publish Reel: " . $response);
-            }
-
-            Log::info("Facebook Reel upload successful for Story ID: {$story->id}. Video ID: {$videoId}");
+            // Step 3: Publish the reel
+            $this->publishReel($videoId, $page, $story);
+            Log::info("Reel published successfully");
 
             $story->update([
                 'facebook_video_id' => $videoId,
@@ -124,9 +77,99 @@ class FacebookService
         }
     }
 
-    public function uploadVideo(Story $story, FacebookPage $page)
+    private function initializeUploadSession(FacebookPage $page)
     {
-        // Redirect all video uploads to Reels as requested by the user
-        return $this->uploadReel($story, $page);
+        $endpoint = "https://graph.facebook.com/v18.0/{$page->page_id}/video_reels";
+
+        $data = [
+            'upload_phase' => 'start',
+            'access_token' => $page->access_token,
+        ];
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $endpoint);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode !== 200) {
+            throw new \Exception("Failed to initialize upload session. HTTP {$httpCode}: {$response}");
+        }
+
+        $result = json_decode($response, true);
+
+        if (!isset($result['video_id'])) {
+            throw new \Exception("Invalid response from Facebook during initialization: {$response}");
+        }
+
+        return $result['video_id'];
+    }
+
+    private function uploadVideoFile($videoId, $videoPath, $fileSize, $accessToken)
+    {
+        $endpoint = "https://rupload.facebook.com/video-upload/{$videoId}";
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $endpoint);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Authorization: OAuth ' . $accessToken,
+            'offset: 0',
+            'file_size: ' . $fileSize,
+        ]);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, file_get_contents($videoPath));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 0);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode !== 200) {
+            throw new \Exception("Failed to upload video file. HTTP {$httpCode}: {$response}");
+        }
+
+        $result = json_decode($response, true);
+
+        if (!isset($result['success']) || !$result['success']) {
+            throw new \Exception("Video upload failed: {$response}");
+        }
+    }
+
+    private function publishReel($videoId, FacebookPage $page, Story $story)
+    {
+        $endpoint = "https://graph.facebook.com/v18.0/{$page->page_id}/video_reels";
+
+        $data = [
+            'access_token' => $page->access_token,
+            'video_id' => $videoId,
+            'upload_phase' => 'finish',
+            'video_state' => 'PUBLISHED',
+            'description' => $story->content,
+        ];
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $endpoint);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode !== 200) {
+            throw new \Exception("Failed to publish reel. HTTP {$httpCode}: {$response}");
+        }
+
+        $result = json_decode($response, true);
+
+        if (!isset($result['success']) || !$result['success']) {
+            throw new \Exception("Publishing reel failed: {$response}");
+        }
     }
 }
