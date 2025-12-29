@@ -4,7 +4,7 @@
     "name": "sweetalert2.esm.all"
   },
   "resources/css/app.css": {
-    "file": "assets/app-zN0SumHD.css",
+    "file": "assets/app-BCfR5-Kv.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -13,7 +13,7 @@
     ]
   },
   "resources/js/Pages/Login.vue": {
-    "file": "assets/Login-C4_0ZtEs.js",
+    "file": "assets/Login-BsAs1a8b.js",
     "name": "Login",
     "src": "resources/js/Pages/Login.vue",
     "isDynamicEntry": true,
@@ -22,7 +22,7 @@
     ]
   },
   "resources/js/Pages/Schedules.vue": {
-    "file": "assets/Schedules-Dq-RotIO.js",
+    "file": "assets/Schedules-BKJ8vg19.js",
     "name": "Schedules",
     "src": "resources/js/Pages/Schedules.vue",
     "isDynamicEntry": true,
@@ -32,7 +32,7 @@
     ]
   },
   "resources/js/Pages/Statistics.vue": {
-    "file": "assets/Statistics-7-ARmlnI.js",
+    "file": "assets/Statistics-M-xIPanr.js",
     "name": "Statistics",
     "src": "resources/js/Pages/Statistics.vue",
     "isDynamicEntry": true,
@@ -41,7 +41,7 @@
     ]
   },
   "resources/js/Pages/Welcome.vue": {
-    "file": "assets/Welcome-D27ZbOFK.js",
+    "file": "assets/Welcome-DNQrGhfc.js",
     "name": "Welcome",
     "src": "resources/js/Pages/Welcome.vue",
     "isDynamicEntry": true,
@@ -54,7 +54,7 @@
     ]
   },
   "resources/js/app.js": {
-    "file": "assets/app-BINV0W-l.js",
+    "file": "assets/app-QsNny_V8.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,

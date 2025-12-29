@@ -133,23 +133,7 @@ class ProcessStoryJob implements ShouldQueue
 
         $jsonInput = json_encode($inputData);
 
-        // Detect python3 path across platforms
-        $pythonPath = 'python3';
-        if (PHP_OS_FAMILY === 'Darwin') {
-            // Check common macOS locations
-            $macPaths = ['/opt/homebrew/bin/python3', '/usr/local/bin/python3'];
-            foreach ($macPaths as $path) {
-                if (file_exists($path)) {
-                    $pythonPath = $path;
-                    break;
-                }
-            }
-        } elseif (PHP_OS_FAMILY === 'Linux') {
-            if (file_exists('/usr/bin/python3')) {
-                $pythonPath = '/usr/bin/python3';
-            }
-        }
-
+        $pythonPath = base_path('ai_worker/venv/bin/python3');
         $pythonScript = base_path('ai_worker/worker.py');
 
         $process = new Process([$pythonPath, $pythonScript, $jsonInput]);

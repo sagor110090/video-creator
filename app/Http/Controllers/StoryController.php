@@ -24,11 +24,12 @@ class StoryController extends Controller
             'title' => 'nullable|string|max:255',
             'topic' => 'nullable|string|max:255',
             'style' => 'nullable|string|in:story,science_short,hollywood_hype,trade_wave',
+            'aspect_ratio' => 'nullable|string|in:16:9,9:16',
         ]);
 
         try {
             $topic = $request->title ?? $request->topic;
-            $storyData = $aiService->generateStory($topic, $request->style ?? 'story');
+            $storyData = $aiService->generateStory($topic, $request->style ?? 'story', $request->aspect_ratio ?? '16:9');
             return response()->json($storyData);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Failed to generate story: ' . $e->getMessage()], 500);
@@ -125,13 +126,12 @@ class StoryController extends Controller
     public function generateMetadata(Story $story, AiStoryService $aiService)
     {
         try {
-            $prompt = "Generate viral YouTube metadata for this story: \n\n" . $story->content;
-            $metadata = $aiService->generateStory($prompt); // This might need a specialized method but generateStory can work if we adjust it
+            $metadata = $aiService->generateMetadata($story->content);
 
             $story->update([
-                'youtube_title' => $metadata['youtube_title'],
-                'youtube_description' => $metadata['youtube_description'],
-                'youtube_tags' => $metadata['youtube_tags'],
+                'youtube_title' => $metadata['youtube_title'] ?? $story->youtube_title,
+                'youtube_description' => $metadata['youtube_description'] ?? $story->youtube_description,
+                'youtube_tags' => $metadata['youtube_tags'] ?? $story->youtube_tags,
             ]);
 
             return response()->json($story);

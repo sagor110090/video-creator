@@ -20,25 +20,32 @@ class FacebookService
         ]);
     }
 
-    public function uploadVideo(Story $story, FacebookPage $page)
+    public function uploadReel(Story $story, FacebookPage $page)
     {
         try {
             Log::info("Starting Facebook Reels upload for Story ID: {$story->id} to page: {$page->name}");
-
             $story->update(['facebook_upload_status' => 'uploading']);
 
             $videoPath = public_path('storage/' . $story->video_path);
-
             if (!file_exists($videoPath) || is_dir($videoPath)) {
                 $videoPath = $story->video_path;
             }
 
             if (!file_exists($videoPath) || is_dir($videoPath)) {
-                throw new \Exception("Video file not found or is a directory: {$videoPath}");
+                throw new \Exception("Video file not found: {$videoPath}");
             }
 
             $fileSize = filesize($videoPath);
-            Log::info("Video file: {$videoPath}, Size: {$fileSize} bytes");
+            $accessToken = $page->access_token;
+            $pageId = $page->page_id;
+
+            // Step 1: Initialize the Reels upload session
+            Log::info("Step 1: Initializing Reels upload session");
+            $initUrl = "https://graph.facebook.com/v18.0/{$pageId}/video_reels";
+            $initData = [
+                'upload_phase' => 'start',
+                'access_token' => $accessToken
+            ];
 
             // Step 1: Initialize upload session
             $videoId = $this->initializeUploadSession($page);
@@ -61,14 +68,11 @@ class FacebookService
             return $videoId;
 
         } catch (\Exception $e) {
-            Log::error("Facebook upload failed for Story ID: {$story->id}: " . $e->getMessage());
-            Log::error("Exception trace: " . $e->getTraceAsString());
-
+            Log::error("Facebook Reel upload failed: " . $e->getMessage());
             $story->update([
                 'facebook_upload_status' => 'failed',
                 'facebook_error' => $e->getMessage()
             ]);
-
             throw $e;
         }
     }

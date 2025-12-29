@@ -139,7 +139,8 @@ const generateStory = async () => {
     try {
         const response = await axios.post('/api/ai/generate-story', {
             title: newStory.value.title || 'a random interesting story',
-            style: newStory.value.style
+            style: newStory.value.style,
+            aspect_ratio: newStory.value.aspect_ratio
         });
 
         // If the AI returned a title but the user didn't provide one, fill it in

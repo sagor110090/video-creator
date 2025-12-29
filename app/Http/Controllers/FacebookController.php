@@ -41,7 +41,7 @@ class FacebookController extends Controller
         session()->start();
         $helper = $this->fb->getRedirectLoginHelper();
         
-        $permissions = ['pages_manage_posts', 'pages_read_engagement', 'pages_show_list'];
+        $permissions = ['pages_manage_posts', 'pages_read_engagement', 'pages_show_list', 'publish_video'];
         $loginUrl = $helper->getLoginUrl(env('FACEBOOK_REDIRECT_URI'), $permissions);
         
         Log::info('Generated Facebook Auth URL: ' . $loginUrl);
