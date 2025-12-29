@@ -136,8 +136,9 @@ class ProcessStoryJob implements ShouldQueue
         $pythonPath = base_path('ai_worker/venv/bin/python3');
         $pythonScript = base_path('ai_worker/worker.py');
 
-        $process = new Process([$pythonPath, $pythonScript, $jsonInput]);
+        $process = new Process([$pythonPath, $pythonScript, $jsonInput], null, null, null);
         $process->setTimeout(1800); // 30 minutes
+        $process->setWorkingDirectory(base_path('ai_worker'));
         $process->run();
 
         Log::info('AI Worker Output: ' . $process->getOutput());

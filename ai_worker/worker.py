@@ -288,8 +288,8 @@ def generate_tts_audio(output_path, text, style='story'):
         '--text', natural_text,
         '--write-media', temp_audio,
         '--voice', voice,
-        '--rate', rate,
-        '--pitch', pitch
+        '--rate=' + rate,
+        '--pitch=' + pitch
     ]
 
     print(f"DEBUG: Generating ultra-realistic human voice: {voice} for style {style}", file=sys.stderr)
