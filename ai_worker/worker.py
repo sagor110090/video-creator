@@ -42,7 +42,7 @@ LOGO_PATH = os.path.join(project_root, 'public', 'logo.png')
 
 def download_web_image(query, output_path):
     """Downloads a high-quality, watermark-free image from the web with multiple fallbacks."""
-    
+
     # 1. Try Pexels first if API key is available (Best for watermark-free images)
     pexels_key = os.getenv('PEXELS_API_KEY')
     if pexels_key:
@@ -74,12 +74,12 @@ def download_web_image(query, output_path):
         "-vectorstock -123rf -dreamstime -canstockphoto -istockphoto -pond5 -bigstock -agefotostock"
     )
     search_query = search_query.strip() + exclude_terms
-    
+
     # Simplify query for search engine
     words = search_query.split()
     if len(words) > 8:
         search_query = ' '.join(words[:8])
-    
+
     print(f"DEBUG: Searching for clean web image. Query: {search_query}", file=sys.stderr)
     encoded_query = urllib.parse.quote(search_query)
 
@@ -94,10 +94,10 @@ def download_web_image(query, output_path):
             matches = re.findall(r'"murl":"(http[^"]+)"', response.text)
             if not matches:
                 matches = re.findall(r'"iurl":"(http[^"]+)"', response.text)
-            
+
             # List of domains to strictly avoid (known for heavy watermarking)
             forbidden_domains = [
-                'shutterstock.com', 'gettyimages.com', 'alamy.com', 'adobe.com', 
+                'shutterstock.com', 'gettyimages.com', 'alamy.com', 'adobe.com',
                 'depositphotos.com', '123rf.com', 'dreamstime.com', 'istockphoto.com',
                 'vectorstock.com', 'canstockphoto.com', 'pond5.com', 'bigstockphoto.com'
             ]
@@ -105,7 +105,7 @@ def download_web_image(query, output_path):
             if matches:
                 for img_url in matches[:10]: # Check more candidates
                     img_url = img_url.replace('\\/', '/')
-                    
+
                     # Skip if URL contains forbidden domains
                     if any(domain in img_url.lower() for domain in forbidden_domains):
                         continue
@@ -283,7 +283,7 @@ def clean_watermark(image_path):
         # We only target the bottom-right and bottom-left corners where most watermarks reside.
         # We EXCLUDE the center to prevent blurring the main subject.
         mask = np.zeros(gray.shape, dtype=np.uint8)
-        
+
         # Bottom-right corner (30% width, 20% height)
         cv2.rectangle(mask, (int(w*0.7), int(h*0.8)), (w, h), 255, -1)
         # Bottom-left corner (30% width, 20% height)
@@ -405,10 +405,17 @@ def create_scene_video(image_path, audio_path, output_path, narration, scene_ind
     else:
         base_w, base_h = 2160, 3840  # 4K vertical base
 
+    # Enhancement filters for a more professional/cinematic look
+    # eq: contrast=1.1, saturation=1.2, brightness=0.02
+    # unsharp: sharpening for better detail
+    enhancements = "eq=contrast=1.1:saturation=1.2:brightness=0.02,unsharp=3:3:1.5:3:3:0.5"
+
     vf_filters = [
         f"scale=w={base_w}:h={base_h}:force_original_aspect_ratio=increase",
         f"crop={base_w}:{base_h}",
+        enhancements,
         f"zoompan=z='{zoom_expr}':d={total_frames}:s={width}x{height}",
+        "vignette=PI/4", # Subtle dark edges for focus, applied after zoom to stay fixed
         f"fade=t=in:st=0:d=0.5",
         f"fade=t=out:st={max(0, duration-0.5)}:d=0.5",
         f"{subtitles_filter}",
@@ -443,7 +450,9 @@ def step4_automatic_assembly(output_dir, scene_videos, background_music=None, as
         width = 1920 if aspect_ratio == '16:9' else 1080
         logo_w = int(width * 0.10)
         # Position bottom-right: W-w-30:H-h-30
-        if run_command([FFMPEG_PATH, '-y', '-i', temp_merged_path, '-i', LOGO_PATH, '-filter_complex', f"[1:v]scale={logo_w}:-1[logo];[0:v][logo]overlay=W-w-30:H-h-30", '-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-c:a', 'copy', temp_watermarked_path]):
+        # Added filter: format=rgba,colorchannelmixer=aa=0.8 (80% opacity for better blending)
+        logo_filter = f"[1:v]scale={logo_w}:-1,format=rgba,colorchannelmixer=aa=0.8[logo]"
+        if run_command([FFMPEG_PATH, '-y', '-i', temp_merged_path, '-i', LOGO_PATH, '-filter_complex', f"{logo_filter};[0:v][logo]overlay=W-w-30:H-h-30", '-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-c:a', 'copy', temp_watermarked_path]):
             video_to_process = temp_watermarked_path
 
     if background_music and os.path.exists(background_music):
