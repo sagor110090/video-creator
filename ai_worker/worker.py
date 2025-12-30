@@ -9,7 +9,11 @@ import re
 import shutil
 import requests
 import base64
-from openai import OpenAI
+import asyncio
+import edge_tts
+import cv2
+import numpy as np
+from PIL import Image
 from dotenv import load_dotenv
 
 # Load .env from project root
@@ -27,12 +31,112 @@ def get_executable_path(name, default_path=None):
         return default_path
     return name
 
-# Detect paths for ffmpeg and ffprobe
+import random
+
+# Detection for paths for ffmpeg and ffprobe
 FFMPEG_PATH = get_executable_path('ffmpeg', '/usr/bin/ffmpeg')
 FFPROBE_PATH = get_executable_path('ffprobe', '/usr/bin/ffprobe')
 
 # Logo Path for watermarking
 LOGO_PATH = os.path.join(project_root, 'public', 'logo.png')
+
+def download_web_image(query, output_path):
+    """Downloads a high-quality, watermark-free image from the web with multiple fallbacks."""
+    
+    # 1. Try Pexels first if API key is available (Best for watermark-free images)
+    pexels_key = os.getenv('PEXELS_API_KEY')
+    if pexels_key:
+        try:
+            url = f"https://api.pexels.com/v1/search?query={urllib.parse.quote(query)}&per_page=1&orientation=landscape"
+            headers = {"Authorization": pexels_key}
+            response = requests.get(url, headers=headers, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('photos'):
+                    img_url = data['photos'][0]['src']['large2x']
+                    img_res = requests.get(img_url, timeout=10)
+                    if img_res.status_code == 200:
+                        with open(output_path, 'wb') as f:
+                            f.write(img_res.content)
+                        return True
+        except Exception as e:
+            print(f"DEBUG: Pexels fallback: {e}", file=sys.stderr)
+
+    # 2. Refine Yahoo search query to exclude watermarked sites
+    search_query = query.replace('"', '').strip()
+    ai_keywords = ['highly detailed', '8k', '4k', 'photorealistic', 'masterpiece', 'stock photo', 'premium']
+    for word in ai_keywords:
+        search_query = re.sub(f'\\b{word}\\b', '', search_query, flags=re.IGNORECASE)
+
+    # Aggressive exclusion of common stock photo sites that use heavy watermarks
+    exclude_terms = (
+        " -stock -watermark -logo -text -premium -shutterstock -gettyimages -alamy -adobe -depositphotos "
+        "-vectorstock -123rf -dreamstime -canstockphoto -istockphoto -pond5 -bigstock -agefotostock"
+    )
+    search_query = search_query.strip() + exclude_terms
+    
+    # Simplify query for search engine
+    words = search_query.split()
+    if len(words) > 8:
+        search_query = ' '.join(words[:8])
+    
+    print(f"DEBUG: Searching for clean web image. Query: {search_query}", file=sys.stderr)
+    encoded_query = urllib.parse.quote(search_query)
+
+    try:
+        # Use filters for large images and creative commons/free types if possible
+        yahoo_url = f"https://images.search.yahoo.com/search/images?p={encoded_query}&imgsz=large&imgtype=photo"
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'}
+
+        response = requests.get(yahoo_url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            # Extract image URLs
+            matches = re.findall(r'"murl":"(http[^"]+)"', response.text)
+            if not matches:
+                matches = re.findall(r'"iurl":"(http[^"]+)"', response.text)
+            
+            # List of domains to strictly avoid (known for heavy watermarking)
+            forbidden_domains = [
+                'shutterstock.com', 'gettyimages.com', 'alamy.com', 'adobe.com', 
+                'depositphotos.com', '123rf.com', 'dreamstime.com', 'istockphoto.com',
+                'vectorstock.com', 'canstockphoto.com', 'pond5.com', 'bigstockphoto.com'
+            ]
+
+            if matches:
+                for img_url in matches[:10]: # Check more candidates
+                    img_url = img_url.replace('\\/', '/')
+                    
+                    # Skip if URL contains forbidden domains
+                    if any(domain in img_url.lower() for domain in forbidden_domains):
+                        continue
+
+                    try:
+                        img_response = requests.get(img_url, headers=headers, timeout=8)
+                        if img_response.status_code == 200:
+                            # Basic image validation
+                            content = img_response.content
+                            if content.startswith(b'\xff\xd8') or content.startswith(b'\x89PNG'):
+                                with open(output_path, 'wb') as f:
+                                    f.write(content)
+                                print(f"DEBUG: Downloaded clean image from: {img_url}", file=sys.stderr)
+                                return True
+                    except:
+                        continue
+
+        # 3. Final fallback: LoremFlickr (High quality, no watermarks, but random-ish)
+        print("DEBUG: Using LoremFlickr fallback", file=sys.stderr)
+        clean_q = urllib.parse.quote(query.split(',')[0].strip())
+        fallback_url = f"https://loremflickr.com/1920/1080/{clean_q}"
+        fb_res = requests.get(fallback_url, timeout=10)
+        if fb_res.status_code == 200:
+            with open(output_path, 'wb') as f:
+                f.write(fb_res.content)
+            return True
+
+    except Exception as e:
+        print(f"Warning: Image search failed: {e}", file=sys.stderr)
+
+    return False
 
 def run_command(command):
     try:
@@ -52,315 +156,178 @@ def run_command(command):
         print(f"Warning: Command '{command[0]}' not found. Mocking output...", file=sys.stderr)
         return False
 
-def fetch_stock_image(output_path, query, aspect_ratio='16:9'):
-    """Fetches a high-quality stock image from Pexels."""
-    pexels_key = os.getenv('PEXELS_API_KEY')
-    if not pexels_key:
-        print("Warning: PEXELS_API_KEY not found. Falling back to AI image.", file=sys.stderr)
-        return False
-
-    try:
-        print(f"DEBUG: Fetching stock image from Pexels for query: {query}", file=sys.stderr)
-        orientation = 'landscape' if aspect_ratio == '16:9' else 'portrait'
-        if aspect_ratio == '1:1': orientation = 'square'
-
-        url = f"https://api.pexels.com/v1/search?query={urllib.parse.quote(query)}&per_page=1&orientation={orientation}"
-        headers = {"Authorization": pexels_key}
-
-        response = requests.get(url, headers=headers, timeout=15)
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('photos'):
-                image_url = data['photos'][0]['src']['large2x']
-                img_response = requests.get(image_url, timeout=15)
-                with open(output_path, 'wb') as f:
-                    f.write(img_response.content)
-                return True
-            else:
-                print(f"Warning: No stock photos found for query: {query}", file=sys.stderr)
-        else:
-            print(f"Warning: Pexels API failed with status {response.status_code}", file=sys.stderr)
-    except Exception as e:
-        print(f"Warning: Pexels error: {e}", file=sys.stderr)
-
-    return False
-
-def fetch_web_image_via_search(output_path, query, aspect_ratio='16:9'):
-    """Finds real images on the web with multiple fallbacks and query simplification."""
-    # List of providers to try
-    providers = [
-        "https://loremflickr.com/{w}/{h}/{q}",
-        "https://api.api-ninjas.com/v1/randomimage?category={c}", # Needs key, but we'll stick to free ones
-        "https://picsum.photos/{w}/{h}?sig={s}" # Last resort random but high quality
-    ]
-
-    # Set dimensions based on aspect ratio
-    width, height = (1920, 1080) if aspect_ratio == '16:9' else (1080, 1920)
-
-    try:
-        # 1. Clean and simplify the query
-        search_query = query
-        if "illustrating:" in query:
-            search_query = query.split("illustrating:")[1].split(".")[0].strip()
-
-        # Remove fluff words
-        fluff_words = [
-            "8k", "4k", "hyper-realistic", "cinematic", "lighting", "highly detailed",
-            "vibrant colors", "composition", "visualization", "resolution", "rendering",
-            "unreal engine", "octane render", "masterpiece", "trending on artstation",
-            "did you know", "it is", "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "with"
-        ]
-
-        # Initial cleaning
-        clean_query = re.sub(r'[^\w\s]', '', search_query.lower())
-        words = [w for w in clean_query.split() if w not in fluff_words]
-
-        # We'll try 3 versions of the query:
-        # 1. First 5 important words
-        # 2. First 2 important words (very broad)
-        # 3. A totally random high-quality nature/tech tag based on style
-
-        query_variants = [
-            " ".join(words[:5]),
-            " ".join(words[:2]),
-            "nature,landscape" if "story" in query.lower() else "technology,science"
-        ]
-
-        for q_variant in query_variants:
-            if not q_variant.strip(): continue
-
-            # Try LoremFlickr first with this variant
-            final_url = f"https://loremflickr.com/{width}/{height}/{urllib.parse.quote(q_variant)}"
-            print(f"DEBUG: Trying LoremFlickr for variant: {q_variant}", file=sys.stderr)
-
-            try:
-                response = requests.get(final_url, headers={
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                }, timeout=15, allow_redirects=True)
-
-                if response.status_code == 200 and 'image' in response.headers.get('Content-Type', ''):
-                    with open(output_path, 'wb') as f:
-                        f.write(response.content)
-                    print(f"DEBUG: Successfully downloaded image for: {q_variant}", file=sys.stderr)
-                    return True
-            except Exception as e:
-                print(f"Warning: LoremFlickr variant {q_variant} failed: {e}", file=sys.stderr)
-
-        # 2. Final Fallback: Picsum (Random but guaranteed high quality real photo)
-        print(f"DEBUG: Trying Picsum as last web resort", file=sys.stderr)
-        picsum_url = f"https://picsum.photos/{width}/{height}?sig={int(time.time())}"
-        response = requests.get(picsum_url, timeout=10)
-        if response.status_code == 200:
-            with open(output_path, 'wb') as f:
-                f.write(response.content)
-            return True
-
-    except Exception as e:
-        print(f"Warning: Web search error: {e}", file=sys.stderr)
-
-    return False
-
-def generate_ai_image(output_path, prompt, aspect_ratio='16:9'):
-    """Generates high-quality AI image using OpenAI, Pollinations.ai or a fallback."""
-    width, height = (1920, 1080) if aspect_ratio == '16:9' else (1080, 1920)
-
-    # 1. Try OpenAI (if API key is available)
-    openai_key = os.getenv('OPENAI_API_KEY')
-    if openai_key:
-        try:
-            print(f"DEBUG: Fetching AI image from OpenAI for prompt: {prompt[:50]}...", file=sys.stderr)
-            client = OpenAI(api_key=openai_key)
-            response = client.images.generate(
-                model="dall-e-3",
-                prompt=prompt,
-                size="1024x1024", # DALL-E 3 default
-                quality="standard"
-            )
-            image_url = response.data[0].url
-            if image_url:
-                img_response = requests.get(image_url, timeout=15)
-                if img_response.status_code == 200:
-                    with open(output_path, "wb") as f:
-                        f.write(img_response.content)
-                    return True
-        except Exception as e:
-            print(f"Warning: OpenAI image generation failed: {e}", file=sys.stderr)
-
-    # 2. Try Pollinations.ai (Free, no key needed)
-    try:
-        encoded_prompt = urllib.parse.quote(prompt)
-        url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={width}&height={height}&nologo=true&seed={int(time.time())}"
-        print(f"DEBUG: Fetching AI image from Pollinations.ai: {url}", file=sys.stderr)
-
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=15) as response:
-            with open(output_path, 'wb') as f:
-                f.write(response.read())
-        return True
-    except Exception as e:
-        print(f"Warning: Pollinations.ai failed: {e}", file=sys.stderr)
-
-    return False
-
-def apply_watermark(image_path, aspect_ratio='16:9'):
-    """Overlays the logo watermark on the image using FFmpeg."""
-    if not os.path.exists(LOGO_PATH):
-        print(f"Warning: Logo not found at {LOGO_PATH}, skipping watermark.", file=sys.stderr)
-        return False
-
-    temp_output = image_path.replace('.jpg', '_watermarked.jpg')
-
-    # Calculate logo size: about 12% of the width
-    width, height = (1920, 1080) if aspect_ratio == '16:9' else (1080, 1920)
-    logo_w = int(width * 0.12)
-
-    # Overlay in bottom-right with 30px padding
-    # [1:v]scale={logo_w}:-1 scales the logo while maintaining aspect ratio
-    # overlay=W-w-30:H-h-30 positions it
-    command = [
-        FFMPEG_PATH, '-y',
-        '-i', image_path,
-        '-i', LOGO_PATH,
-        '-filter_complex', f"[1:v]scale={logo_w}:-1[logo];[0:v][logo]overlay=W-w-30:H-h-30",
-        '-q:v', '2', # High quality
-        temp_output
-    ]
-
-    print(f"DEBUG: Applying watermark to {image_path}", file=sys.stderr)
-    if run_command(command):
-        if os.path.exists(temp_output):
-            os.replace(temp_output, image_path)
-            return True
-    return False
-
 def process_text_for_naturalness(text):
-    """Adds natural pauses and breathing room to the text for a more human feel."""
-    # Add slightly longer pauses after sentences and commas
-    text = text.replace('. ', '... ')
-    text = text.replace(', ', ', ... ')
-    # Ensure it's not too long for the TTS engine in one go
-    return text
+    """Cleans text and adds natural punctuation for better cadence without using SSML tags."""
+    # Remove any existing SSML-like tags
+    text = re.sub(r'<[^>]*>', '', text)
 
-def generate_tts_audio(output_path, text, style='story'):
-    """Generates 100% human-like 'cloned' audio using high-fidelity neural voices and studio processing."""
-    # Try to find edge-tts in PATH, then fallback to local venv
-    local_venv_edge = os.path.join(os.path.dirname(__file__), 'venv', 'bin', 'edge-tts')
-    edge_tts_path = get_executable_path('edge-tts', local_venv_edge)
+    # Add natural pauses using punctuation that the neural engine understands
+    text = text.replace('... ', '... ')
+    text = text.replace('. ', '... ') # Pause between sentences
+    text = text.replace(', ', ', ')   # Natural breath pause
 
-    # Process text for more natural human-like pauses
-    natural_text = process_text_for_naturalness(text)
+    return text.strip()
 
-    # Personality mapping for "Cloned Voice" quality
-    # We use the most expressive neural voices available
-    personalities = {
-        'science_short': {
-            'voice': 'en-US-SteffanNeural', # Very natural, scholarly male
-            'rate': '+2%',
-            'pitch': '-1Hz'
-        },
-        'hollywood_hype': {
-            'voice': 'en-US-AvaNeural',     # Extremely expressive, modern female
-            'rate': '+8%',
-            'pitch': '+1Hz'
-        },
-        'trade_wave': {
-            'voice': 'en-GB-RyanNeural',    # Sophisticated British male
-            'rate': '+0%',
-            'pitch': '-1Hz'
-        },
-        'story': {
-            'voice': 'en-US-AndrewNeural',  # Warm, rich storytelling male
-            'rate': '-3%',
-            'pitch': '+0Hz'
-        }
+async def generate_tts_audio(output_path, text, style='story', scene_index=0):
+    """Generates 100% human-like audio using official parameters for natural cadence."""
+    # Voice mapping
+    voices = {
+        'science_short': 'en-US-SteffanNeural',
+        'hollywood_hype': 'en-US-AvaNeural',
+        'trade_wave': 'en-GB-RyanNeural',
+        'story': 'en-US-AndrewNeural'
     }
+    voice = voices.get(style, voices['story'])
 
+    # Clean and enhance text punctuation for better flow
+    clean_text = process_text_for_naturalness(text)
+
+    # Personality-based prosody settings
+    personalities = {
+        'science_short': {'rate': '+2%', 'pitch': '-1Hz'},
+        'hollywood_hype': {'rate': '+10%', 'pitch': '+2Hz'},
+        'trade_wave': {'rate': '+1%', 'pitch': '-2Hz'},
+        'story': {'rate': '-5%', 'pitch': '+1Hz'}
+    }
     config = personalities.get(style, personalities['story'])
-    voice = config['voice']
-    rate = config['rate']
-    pitch = config['pitch']
 
-    # Generate high-quality audio with custom rate and pitch
+    # Add "Human Variation" based on scene index to break robotic repetition
+    scene_pitch_mod = (scene_index % 3 - 1) * 2 # -2Hz, 0Hz, or +2Hz
+    scene_rate_mod = (scene_index % 2) * 5 # 0% or +5%
+
+    base_rate = int(config['rate'].replace('%', ''))
+    base_pitch = int(config['pitch'].replace('Hz', ''))
+
+    final_rate = f"{base_rate + scene_rate_mod:+d}%"
+    final_pitch = f"{base_pitch + scene_pitch_mod:+d}Hz"
+
     temp_audio = output_path.replace('.mp3', '_temp.mp3')
-    command = [
-        edge_tts_path,
-        '--text', natural_text,
-        '--write-media', temp_audio,
-        '--voice', voice,
-        '--rate=' + rate,
-        '--pitch=' + pitch
-    ]
 
-    print(f"DEBUG: Generating ultra-realistic human voice: {voice} for style {style}", file=sys.stderr)
+    print(f"DEBUG: Generating ultra-realistic human voice: {voice} (Rate: {final_rate}, Pitch: {final_pitch}, Scene {scene_index})", file=sys.stderr)
 
-    if run_command(command):
+    success = False
+    try:
+        communicate = edge_tts.Communicate(clean_text, voice, rate=final_rate, pitch=final_pitch)
+        await communicate.save(temp_audio)
+        if os.path.exists(temp_audio) and os.path.getsize(temp_audio) > 0:
+            success = True
+    except Exception as e:
+        print(f"Warning: TTS generation failed: {e}. Falling back to plain text.", file=sys.stderr)
+        try:
+            communicate = edge_tts.Communicate(text, voice)
+            await communicate.save(temp_audio)
+            if os.path.exists(temp_audio) and os.path.getsize(temp_audio) > 0:
+                success = True
+        except Exception as e2:
+            print(f"Error: Fallback TTS failed: {e2}", file=sys.stderr)
+
+    if success and os.path.exists(temp_audio):
         # STUDIO QUALITY POST-PROCESSING
-        # We add 'dynaudnorm' (dynamic normalization) and a slight 'highpass/lowpass'
-        # to mimic high-end studio microphones and remove robotic tinny frequencies.
         convert_cmd = [
             FFMPEG_PATH, '-y', '-i', temp_audio,
             '-af', (
                 'dynaudnorm=p=0.9:s=5,'   # Professional dynamic normalization
-                'aecho=0.8:0.88:6:0.4,'   # Subtle room presence (not an echo)
+                'aecho=0.8:0.88:6:0.4,'   # Subtle room presence
                 'highpass=f=80,'          # Remove low-end rumble
-                'lowpass=f=15000'         # Remove harsh high-end digital hiss
+                'lowpass=f=15000'         # Remove harsh high-end hiss
             ),
             '-ar', '48000',
             '-ac', '2',
-            '-q:a', '0',               # Best possible VBR quality
+            '-q:a', '0',
             output_path
         ]
-        if run_command(convert_cmd):
-            os.remove(temp_audio)
-            return
+        if not run_command(convert_cmd):
+            os.replace(temp_audio, output_path)
+            success = True
 
-    # Fallback to macOS 'say' if edge-tts fails (only on macOS)
+    # Cleanup
+    if os.path.exists(temp_audio): os.remove(temp_audio)
+
+    if success: return
+
+    # Fallback to macOS 'say'
     if sys.platform == 'darwin':
-        print(f"Warning: edge-tts failed. Falling back to macOS 'say'.", file=sys.stderr)
+        print(f"Warning: Falling back to macOS 'say'.", file=sys.stderr)
         temp_aiff = output_path.replace('.mp3', '.aiff')
-        say_command = ['say', text, '-o', temp_aiff]
-        if run_command(say_command):
-            convert_command = [
-                FFMPEG_PATH, '-y', '-i', temp_aiff,
-                '-ar', '48000',
-                '-ac', '2',
-                '-codec:a', 'libmp3lame', '-qscale:a', '2',
-                output_path
-            ]
-            run_command(convert_command)
-            if os.path.exists(temp_aiff):
-                os.remove(temp_aiff)
+        if run_command(['say', text, '-o', temp_aiff]):
+            run_command([FFMPEG_PATH, '-y', '-i', temp_aiff, '-ar', '48000', '-ac', '2', '-codec:a', 'libmp3lame', '-qscale:a', '2', output_path])
+            if os.path.exists(temp_aiff): os.remove(temp_aiff)
             return
 
-    # Final fallback to silence for both Linux and macOS if everything else fails
-    print(f"Warning: TTS failed. Falling back to silence.", file=sys.stderr)
-    command_silence = [
-        FFMPEG_PATH, '-y', '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo',
-        '-t', '5', output_path
-    ]
-    run_command(command_silence)
+    # Final fallback to silence
+    print(f"Warning: Falling back to silence.", file=sys.stderr)
+    run_command([FFMPEG_PATH, '-y', '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo', '-t', '5', output_path])
+
+def clean_watermark(image_path):
+    """Attempts to remove watermarks from an image with high precision to avoid blurriness."""
+    try:
+        img = cv2.imread(image_path)
+        if img is None: return False
+
+        # Convert to grayscale
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        h, w = gray.shape
+
+        # 1. Precise Edge Detection (Canny)
+        # Higher thresholds to pick up only strong edges like text/logos
+        edges = cv2.Canny(gray, 100, 200)
+
+        # 2. Brightness Mask
+        # Watermarks are typically light-colored/white
+        _, bright_mask = cv2.threshold(gray, 220, 255, cv2.THRESH_BINARY)
+
+        # 3. Combine: only keep edges that are also bright
+        combined = cv2.bitwise_and(edges, bright_mask)
+
+        # 4. Location-based filtering
+        # We only target the bottom-right and bottom-left corners where most watermarks reside.
+        # We EXCLUDE the center to prevent blurring the main subject.
+        mask = np.zeros(gray.shape, dtype=np.uint8)
+        
+        # Bottom-right corner (30% width, 20% height)
+        cv2.rectangle(mask, (int(w*0.7), int(h*0.8)), (w, h), 255, -1)
+        # Bottom-left corner (30% width, 20% height)
+        cv2.rectangle(mask, (0, int(h*0.8)), (int(w*0.3), h), 255, -1)
+        # Top-right corner (sometimes used)
+        cv2.rectangle(mask, (int(w*0.8), 0), (w, int(h*0.15)), 255, -1)
+
+        # Final mask: detected features inside our hot zones
+        final_mask = cv2.bitwise_and(combined, mask)
+
+        # 5. Dilate slightly to cover the thickness of the text strokes
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2,2))
+        final_mask = cv2.dilate(final_mask, kernel, iterations=1)
+
+        # Safety Check: If the mask is too large, it's likely a false positive
+        # Watermarks should not cover more than 5% of the total image area
+        total_pixels = h * w
+        mask_pixels = cv2.countNonZero(final_mask)
+        if mask_pixels == 0 or mask_pixels > (total_pixels * 0.05):
+            return False
+
+        # 6. Inpaint using NS (Navier-Stokes) which is often better for preservation than Telea
+        # Radius 3 is small enough to avoid significant blur
+        result = cv2.inpaint(img, final_mask, 3, cv2.INPAINT_NS)
+
+        # Overwrite the original image
+        cv2.imwrite(image_path, result)
+        return True
+    except Exception as e:
+        print(f"Warning: Watermark cleaning failed: {e}", file=sys.stderr)
+        return False
 
 def create_scene_video(image_path, audio_path, output_path, narration, scene_index=0, aspect_ratio='16:9'):
     """Creates high-quality video with smooth zoom animation and enhanced subtitles."""
-    # Use higher resolution for better quality
     width, height = (1920, 1080) if aspect_ratio == '16:9' else (1080, 1920)
 
-    command_duration = [
-        FFPROBE_PATH, '-v', 'error', '-show_entries', 'format=duration',
-        '-of', 'default=noprint_wrappers=1:nokey=1', audio_path
-    ]
-
+    # Get audio duration
     try:
-        result = subprocess.run(command_duration, capture_output=True, text=True)
-        duration = float(result.stdout.strip()) if result.returncode == 0 else 5.0
+        result = subprocess.run([FFPROBE_PATH, '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', audio_path], capture_output=True, text=True)
+        duration = float(result.stdout.strip())
     except:
         duration = 5.0
-
-    # Ensure duration is at least 1 second
     duration = max(duration, 1.0)
 
-    # Use higher fps for smoother animation (30 fps instead of 25)
     fps = 30
     total_frames = int(duration * fps)
 
@@ -407,7 +374,7 @@ def create_scene_video(image_path, audio_path, output_path, narration, scene_ind
             # End time is when the next chunk starts, or end of video
             end_time = min((i + chunk_size) * duration_per_word, duration)
             chunks.append({
-                'text': " ".join(chunk_words), # Removed .upper() to keep punctuation and case as intended
+                'text': " ".join(chunk_words),
                 'start': start_time,
                 'end': end_time
             })
@@ -419,19 +386,8 @@ def create_scene_video(image_path, audio_path, output_path, narration, scene_ind
 
         drawtext_filters = []
         for chunk in chunks:
-            # For the text parameter in drawtext, we need to be extremely careful with single quotes.
-            # In FFmpeg's filter syntax, to get a literal ' inside a '...' string,
-            # you must use '\'' which actually means: end string, escaped quote, start string.
-            # However, when passed via Python's subprocess.run, additional layers of escaping are involved.
-
-            # The most reliable way to handle 't, 's, etc. in drawtext is to:
-            # use a very specific triple-backslash escaping for the single quote
-            # so that it survives both the Python string and the FFmpeg filter parsing.
             safe_txt = chunk['text'].replace("'", "'\\\\\\''").replace(":", "\\:").replace(",", "\\,")
-            # Also need to handle potential newlines or other weirdness in the chunk
             safe_txt = safe_txt.replace("\n", " ").replace("\r", "")
-
-            # Each chunk is a separate drawtext filter enabled only during its timeframe
             dt = (
                 f"drawtext=text='{safe_txt}':fontfile='{font_path}':"
                 f"fontcolor=#FFFF00:fontsize={font_size}:borderw=5:bordercolor=black:"
@@ -442,166 +398,115 @@ def create_scene_video(image_path, audio_path, output_path, narration, scene_ind
 
         subtitles_filter = ",".join(drawtext_filters)
 
-    # High-quality video encoding settings:
+    # To prevent stretching, we first scale and crop the image to the target aspect ratio
+    # at a high resolution before applying zoompan.
+    if aspect_ratio == '16:9':
+        base_w, base_h = 3840, 2160  # 4K base
+    else:
+        base_w, base_h = 2160, 3840  # 4K vertical base
+
+    vf_filters = [
+        f"scale=w={base_w}:h={base_h}:force_original_aspect_ratio=increase",
+        f"crop={base_w}:{base_h}",
+        f"zoompan=z='{zoom_expr}':d={total_frames}:s={width}x{height}",
+        f"fade=t=in:st=0:d=0.5",
+        f"fade=t=out:st={max(0, duration-0.5)}:d=0.5",
+        f"{subtitles_filter}",
+        f"fps={fps}",
+        "format=yuv420p"
+    ]
+
     command = [
-        FFMPEG_PATH, '-y',
-        '-loop', '1', '-i', image_path,
-        '-i', audio_path,
-        '-vf', f"scale={width}:{height}:flags=lanczos,zoompan=z='{zoom_expr}':d={total_frames}:s={width}x{height}:fps={fps},fps={fps},{subtitles_filter},format=yuv420p",
-        '-c:v', 'libx264',
-        '-preset', 'slow',
-        '-crf', '18',
-        '-tune', 'film',
-        '-t', str(duration),
-        '-pix_fmt', 'yuv420p',
-        '-c:a', 'aac',
-        '-b:a', '192k',
-        '-ar', '48000',
-        '-shortest',
-        output_path
+        FFMPEG_PATH, '-y', '-loop', '1', '-i', image_path, '-i', audio_path,
+        '-vf', ",".join(vf_filters), '-c:v', 'libx264', '-preset', 'slow', '-crf', '18',
+        '-t', str(duration), '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-shortest', output_path
     ]
     if not run_command(command):
-        with open(output_path, 'w') as f:
-            f.write("mock video content")
+        with open(output_path, 'w') as f: f.write("mock")
 
-def step4_automatic_assembly(output_dir, scene_videos, background_music=None):
+def step4_automatic_assembly(output_dir, scene_videos, background_music=None, aspect_ratio='16:9'):
     """Stitches all scenes into one final .mp4 with high-quality audio and adds background music."""
     final_video_path = os.path.join(output_dir, "final_video.mp4")
     concat_file_path = os.path.join(output_dir, "concat.txt")
-    temp_video_path = os.path.join(output_dir, "temp_merged.mp4")
+    temp_merged_path = os.path.join(output_dir, "temp_merged.mp4")
+    temp_watermarked_path = os.path.join(output_dir, "temp_watermarked.mp4")
 
     with open(concat_file_path, 'w') as f:
         for vid in scene_videos:
             f.write(f"file '{os.path.abspath(vid)}'\n")
 
-    # Step 4.1: Merge all scene videos
-    merge_command = [
-        FFMPEG_PATH, '-y', '-f', 'concat', '-safe', '0', '-i', concat_file_path,
-        '-c', 'copy', temp_video_path
-    ]
-    if not run_command(merge_command):
+    if not run_command([FFMPEG_PATH, '-y', '-f', 'concat', '-safe', '0', '-i', concat_file_path, '-c', 'copy', temp_merged_path]):
         return None
 
-    # Step 4.2: Add background music if provided
+    video_to_process = temp_merged_path
+    if os.path.exists(LOGO_PATH):
+        width = 1920 if aspect_ratio == '16:9' else 1080
+        logo_w = int(width * 0.10)
+        # Position bottom-right: W-w-30:H-h-30
+        if run_command([FFMPEG_PATH, '-y', '-i', temp_merged_path, '-i', LOGO_PATH, '-filter_complex', f"[1:v]scale={logo_w}:-1[logo];[0:v][logo]overlay=W-w-30:H-h-30", '-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-c:a', 'copy', temp_watermarked_path]):
+            video_to_process = temp_watermarked_path
+
     if background_music and os.path.exists(background_music):
-        # Mix audio with high-quality settings
-        # -stream_loop -1 loops the background music
-        # -filter_complex mixes audio: [1:a]volume=0.10 lowers background music, [0:a]volume=1.5 boosts narration
         music_mix_command = [
-            FFMPEG_PATH, '-y',
-            '-i', temp_video_path,
-            '-stream_loop', '-1', '-i', background_music,
+            FFMPEG_PATH, '-y', '-i', video_to_process, '-stream_loop', '-1', '-i', background_music,
             '-filter_complex', "[1:a]volume=0.10[bg];[0:a]volume=1.5[narr];[narr][bg]amix=inputs=2:duration=first[a]",
-            '-map', '0:v',
-            '-map', '[a]',
-            '-c:v', 'copy',
-            '-c:a', 'aac',
-            '-b:a', '192k',
-            '-ar', '48000',
-            '-shortest',
-            final_video_path
+            '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-shortest', final_video_path
         ]
         if run_command(music_mix_command):
-            if os.path.exists(temp_video_path):
-                os.remove(temp_video_path)
+            for p in [temp_merged_path, temp_watermarked_path]:
+                if os.path.exists(p): os.remove(p)
             return final_video_path
 
-    # Fallback to just the merged video if no music or command fails
-    os.rename(temp_video_path, final_video_path)
+    if video_to_process == temp_watermarked_path:
+        os.rename(temp_watermarked_path, final_video_path)
+        if os.path.exists(temp_merged_path): os.remove(temp_merged_path)
+    else:
+        os.rename(temp_merged_path, final_video_path)
+
     return final_video_path
 
-def main():
-    if len(sys.argv) < 2:
-        print("Usage: python worker.py <json_input>")
-        sys.exit(1)
+async def main():
+    if len(sys.argv) < 2: return
+    try:
+        if os.path.exists(sys.argv[1]):
+            with open(sys.argv[1], 'r') as f: data = json.load(f)
+        else: data = json.loads(sys.argv[1])
+    except: return
 
-    data = json.loads(sys.argv[1])
-    story_id = data['story_id']
-    style = data.get('style', 'story')
-    scenes = data['scenes']
     output_dir = data['output_dir']
+    scenes = data['scenes']
+    style = data.get('style', 'story')
     aspect_ratio = data.get('aspect_ratio', '16:9')
+    bg_music = data.get('background_music')
 
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    if not os.path.exists(output_dir): os.makedirs(output_dir)
 
-    print(f"DEBUG: Processing story {story_id} (style: {style}) with {len(scenes)} scenes in {aspect_ratio}", file=sys.stderr)
     scene_videos = []
-
     for i, scene in enumerate(scenes):
-        print(f"DEBUG: Processing scene {i}", file=sys.stderr)
         img_path = os.path.join(output_dir, f"scene_{i}_img.jpg")
         aud_path = os.path.join(output_dir, f"scene_{i}_aud.mp3")
         vid_path = os.path.join(output_dir, f"scene_{i}_vid.mp4")
 
-        # 1. Generate/Fetch Visuals
-        media_type = scene.get('media_type', 'ai')
-        visual_success = False
+        # Try to download image from web
+        success = download_web_image(scene['image_prompt'], img_path)
 
-        # Priority 1: AI Web Search using the detailed image_prompt
-        if scene.get('image_prompt'):
-            print(f"DEBUG: Trying AI WEB SEARCH for scene {i} using image_prompt", file=sys.stderr)
-            visual_success = fetch_web_image_via_search(img_path, scene['image_prompt'], aspect_ratio)
+        if not success:
+            # Fallback: Generate a black image if download fails
+            print(f"DEBUG: Falling back to black image for scene {i}", file=sys.stderr)
+            dimensions = "1920x1080" if aspect_ratio == "16:9" else "1080x1920"
+            run_command([FFMPEG_PATH, '-y', '-f', 'lavfi', '-i', f'color=c=black:s={dimensions}', '-frames:v', '1', img_path])
+        else:
+            # Clean the downloaded image from watermarks before using it
+            clean_watermark(img_path)
 
-        # Priority 2: Pexels Stock Search
-        if not visual_success:
-            query = scene.get('stock_query') or scene.get('narration')
-            if query:
-                print(f"DEBUG: Trying STOCK SEARCH for scene {i}", file=sys.stderr)
-                visual_success = fetch_stock_image(img_path, query, aspect_ratio)
-
-        # Priority 3: AI Image Generation
-        if not visual_success:
-            if scene.get('image_prompt'):
-                print(f"DEBUG: Trying AI GENERATION for scene {i}", file=sys.stderr)
-                visual_success = generate_ai_image(img_path, scene['image_prompt'], aspect_ratio)
-
-        # Priority 4: Final Retry with broad keywords if everything failed
-        if not visual_success:
-            print(f"DEBUG: Everything failed for scene {i}, trying one last broad web search", file=sys.stderr)
-            visual_success = fetch_web_image_via_search(img_path, "nature background", aspect_ratio)
-
-        if not visual_success:
-            # If we STILL don't have an image, we MUST at least have a valid file to avoid FFmpeg crashing
-            # but we won't use the blue mock boxes. We'll use a solid black background which is more professional.
-            print(f"DEBUG: Final fallback to black frame for scene {i}", file=sys.stderr)
-            width, height = (1920, 1080) if aspect_ratio == '16:9' else (1080, 1920)
-            command = [
-                FFMPEG_PATH, '-y', '-f', 'lavfi', '-i', f'color=c=black:s={width}x{height}:d=1',
-                '-frames:v', '1', img_path
-            ]
-            run_command(command)
-
-        # Apply watermark to the final image
-        apply_watermark(img_path, aspect_ratio)
-
-        # 2. Voice Generation
-        generate_tts_audio(aud_path, scene['narration'], style)
-
-        # 3. Create Scene Video
+        await generate_tts_audio(aud_path, scene['narration'], style, i)
         create_scene_video(img_path, aud_path, vid_path, scene['narration'], i, aspect_ratio)
-        scene_videos.append(vid_path)
+        if os.path.exists(vid_path): scene_videos.append(vid_path)
 
-    # 4. Step 4: Automatic Assembly
-    print(f"DEBUG: Assembling final video...", file=sys.stderr)
-
-    # Check for background music in public/audio/background.mp3
-    # Use absolute path based on script location
-    script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    bg_music_path = os.path.join(script_dir, 'public', 'audio', 'background.mp3')
-
-    final_video = step4_automatic_assembly(output_dir, scene_videos, bg_music_path)
-
-    if final_video:
-        print(json.dumps({
-            "status": "success",
-            "video_path": final_video
-        }))
-    else:
-        print(json.dumps({
-            "status": "error",
-            "message": "Assembly failed"
-        }))
+    if scene_videos:
+        final_video = step4_automatic_assembly(output_dir, scene_videos, bg_music, aspect_ratio)
+        if final_video:
+            print(json.dumps({"video_path": os.path.abspath(final_video)}))
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

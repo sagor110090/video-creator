@@ -81,14 +81,14 @@ class ProcessStoryJob implements ShouldQueue
         $sentences = preg_split('/(?<=[.!?])\s+/', $content, -1, PREG_SPLIT_NO_EMPTY);
 
         $style = $this->story->style ?? 'story';
-        $visualStyle = "Cinematic storybook illustration";
+        $visualPrefix = "";
 
         if ($style === 'science_short') {
-            $visualStyle = "High-tech scientific visualization, 8k, highly detailed, realistic lighting, vibrant colors, cinematic composition";
+            $visualPrefix = "science, technology, ";
         } elseif ($style === 'hollywood_hype') {
-            $visualStyle = "Glossy celebrity news style, high-end paparazzi lighting, vibrant red carpet atmosphere, professional photography, 8k";
+            $visualPrefix = "news, celebrity, ";
         } elseif ($style === 'trade_wave') {
-            $visualStyle = "Professional financial news, trading charts background, modern office, clean minimalist aesthetic, high-resolution, sharp focus";
+            $visualPrefix = "finance, business, ";
         }
 
         $storyboard = [];
@@ -96,9 +96,11 @@ class ProcessStoryJob implements ShouldQueue
             $sentence = trim($sentence);
             if (strlen($sentence) < 10) continue;
 
+            // Generate a clean, search-friendly prompt
+            // Focus on the core sentence content without AI jargon
             $storyboard[] = [
                 'narration' => $sentence,
-                'image_prompt' => "{$visualStyle}, illustrating: " . $sentence . ". Cinematic, hyper-realistic, 8k resolution.",
+                'image_prompt' => $visualPrefix . $sentence,
             ];
         }
 

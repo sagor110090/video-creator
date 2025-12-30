@@ -5,5 +5,8 @@ certifi==2025.11.12
 requests==2.32.3
 openai==1.57.0
 python-dotenv==1.0.1
+numpy
+opencv-python
+Pillow
 # FFmpeg is required but is a system dependency, not a python package.
 # These are the core packages needed for the AI worker to function.
