@@ -127,6 +127,7 @@ class ProcessStoryJob implements ShouldQueue
             'scenes' => $scenes,
             'aspect_ratio' => $this->story->aspect_ratio ?? '16:9',
             'output_dir' => storage_path("app/public/videos/{$this->story->id}"),
+            'background_music' => public_path('audio/background.mp3'),
         ];
 
         if (!is_dir($inputData['output_dir'])) {
