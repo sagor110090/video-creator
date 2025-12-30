@@ -487,6 +487,8 @@ async def main():
     style = data.get('style', 'story')
     aspect_ratio = data.get('aspect_ratio', '16:9')
     bg_music = data.get('background_music')
+    if not bg_music or not os.path.exists(bg_music):
+        bg_music = os.path.join(project_root, 'public', 'audio', 'background.mp3')
 
     if not os.path.exists(output_dir): os.makedirs(output_dir)
 
