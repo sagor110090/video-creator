@@ -15,6 +15,10 @@ import cv2
 import numpy as np
 from PIL import Image
 from dotenv import load_dotenv
+import torch
+from chatterbox.tts import ChatterboxTTS
+from chatterbox.vc import ChatterboxVC
+from scipy.io import wavfile
 
 # Load .env from project root
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -34,11 +38,21 @@ def get_executable_path(name, default_path=None):
 import random
 
 # Detection for paths for ffmpeg and ffprobe
-FFMPEG_PATH = get_executable_path('ffmpeg', '/usr/bin/ffmpeg')
-FFPROBE_PATH = get_executable_path('ffprobe', '/usr/bin/ffprobe')
+FFMPEG_PATH = get_executable_path('ffmpeg', '/opt/homebrew/bin/ffmpeg')
+FFPROBE_PATH = get_executable_path('ffprobe', '/opt/homebrew/bin/ffprobe')
 
 # Logo Path for watermarking
 LOGO_PATH = os.path.join(project_root, 'public', 'logo.png')
+
+# Target Voice Path for voice cloning
+TARGET_VOICE_PATH = os.path.join(project_root, 'public', 'audio', 'sample.m4a')
+
+# Initialize Chatterbox models
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+print(f"Initializing Chatterbox models on {DEVICE}...", file=sys.stderr)
+tts_model = ChatterboxTTS.from_pretrained(DEVICE)
+vc_model = ChatterboxVC.from_pretrained(DEVICE)
+print("Chatterbox models initialized successfully!", file=sys.stderr)
 
 def download_web_image(query, output_path):
     """Downloads a high-quality, watermark-free image from the web with multiple fallbacks."""
@@ -184,16 +198,16 @@ async def generate_tts_audio(output_path, text, style='story', scene_index=0):
 
     # Personality-based prosody settings
     personalities = {
-        'science_short': {'rate': '+2%', 'pitch': '-1Hz'},
-        'hollywood_hype': {'rate': '+10%', 'pitch': '+2Hz'},
-        'trade_wave': {'rate': '+1%', 'pitch': '-2Hz'},
-        'story': {'rate': '-5%', 'pitch': '+1Hz'}
+        'science_short': {'rate': '-15%', 'pitch': '-1Hz'},
+        'hollywood_hype': {'rate': '-5%', 'pitch': '+2Hz'},
+        'trade_wave': {'rate': '-15%', 'pitch': '-2Hz'},
+        'story': {'rate': '-25%', 'pitch': '+1Hz'}
     }
     config = personalities.get(style, personalities['story'])
 
     # Add "Human Variation" based on scene index to break robotic repetition
     scene_pitch_mod = (scene_index % 3 - 1) * 2 # -2Hz, 0Hz, or +2Hz
-    scene_rate_mod = (scene_index % 2) * 5 # 0% or +5%
+    scene_rate_mod = (scene_index % 2) * 2 # 0% or +2%
 
     base_rate = int(config['rate'].replace('%', ''))
     base_pitch = int(config['pitch'].replace('Hz', ''))
@@ -257,6 +271,79 @@ async def generate_tts_audio(output_path, text, style='story', scene_index=0):
     # Final fallback to silence
     print(f"Warning: Falling back to silence.", file=sys.stderr)
     run_command([FFMPEG_PATH, '-y', '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo', '-t', '5', output_path])
+
+async def generate_cloned_voice(output_path, text, target_voice_path=None, scene_index=0):
+    """Generates audio using ChatterboxTTS and ChatterboxVC for voice cloning."""
+    try:
+        print(f"DEBUG: Generating cloned voice with target: {target_voice_path}", file=sys.stderr)
+
+        # First, generate TTS from text
+        tts_wav = tts_model.generate(text)
+
+        # Save TTS output to temporary WAV file
+        temp_tts_path = output_path.replace('.mp3', '_tts.wav')
+        tts_numpy = tts_wav.squeeze(0).numpy()
+        wavfile.write(temp_tts_path, tts_model.sr, tts_numpy.astype(np.float32))
+
+        # Convert target voice to WAV if it's not already
+        target_wav_path = None
+        if target_voice_path and os.path.exists(target_voice_path):
+            target_wav_path = output_path.replace('.mp3', '_target.wav')
+            if target_voice_path.endswith('.m4a'):
+                convert_cmd = [
+                    FFMPEG_PATH, '-y', '-i', target_voice_path,
+                    '-ar', str(tts_model.sr), '-ac', '1',
+                    target_wav_path
+                ]
+                if not run_command(convert_cmd):
+                    print(f"Warning: Failed to convert target voice to WAV", file=sys.stderr)
+                    target_wav_path = None
+            else:
+                target_wav_path = target_voice_path
+
+        # Apply voice cloning to TTS output
+        wav = vc_model.generate(temp_tts_path, target_voice_path=target_wav_path)
+
+        # Save final output as WAV first
+        temp_output_wav = output_path.replace('.mp3', '_output.wav')
+        wav_numpy = wav.squeeze(0).numpy()
+        wavfile.write(temp_output_wav, vc_model.sr, wav_numpy.astype(np.float32))
+
+        # Convert to MP3 with quality settings
+        convert_cmd = [
+            FFMPEG_PATH, '-y', '-i', temp_output_wav,
+            '-af', (
+                'dynaudnorm=p=0.9:s=5,'   # Professional dynamic normalization
+                'aecho=0.8:0.88:6:0.4,'   # Subtle room presence
+                'highpass=f=80,'          # Remove low-end rumble
+                'lowpass=f=15000,'        # Remove harsh high-end hiss
+                'atempo=0.85'             # Slower speed (85%) for ChatterboxTTS naturalness
+            ),
+            '-ar', '48000',
+            '-ac', '2',
+            '-q:a', '0',
+            output_path
+        ]
+
+        success = run_command(convert_cmd)
+
+        # Cleanup temporary files
+        for temp_file in [temp_tts_path, temp_output_wav]:
+            if target_wav_path and temp_file != target_wav_path and os.path.exists(temp_file):
+                os.remove(temp_file)
+        if target_wav_path and target_wav_path != target_voice_path and os.path.exists(target_wav_path):
+            os.remove(target_wav_path)
+
+        if success and os.path.exists(output_path):
+            print(f"DEBUG: Successfully generated cloned voice at {output_path}", file=sys.stderr)
+            return
+
+    except Exception as e:
+        print(f"Error: Voice cloning failed: {e}", file=sys.stderr)
+
+    # Fallback to edge_tts if voice cloning fails
+    print(f"Warning: Falling back to edge_tts for scene {scene_index}", file=sys.stderr)
+    await generate_tts_audio(output_path, text, 'story', scene_index)
 
 def clean_watermark(image_path):
     """Attempts to remove watermarks from an image with high precision to avoid blurriness."""
@@ -475,12 +562,19 @@ def step4_automatic_assembly(output_dir, scene_videos, background_music=None, as
     return final_video_path
 
 async def main():
-    if len(sys.argv) < 2: return
+    if len(sys.argv) < 2:
+        print("Error: No input provided", file=sys.stderr)
+        return
     try:
         if os.path.exists(sys.argv[1]):
             with open(sys.argv[1], 'r') as f: data = json.load(f)
-        else: data = json.loads(sys.argv[1])
-    except: return
+        else:
+            data = json.loads(sys.argv[1])
+    except Exception as e:
+        print(f"Error parsing input: {str(e)}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        return
 
     output_dir = data['output_dir']
     scenes = data['scenes']
@@ -510,7 +604,7 @@ async def main():
             # Clean the downloaded image from watermarks before using it
             clean_watermark(img_path)
 
-        await generate_tts_audio(aud_path, scene['narration'], style, i)
+        await generate_cloned_voice(aud_path, scene['narration'], TARGET_VOICE_PATH, i)
         create_scene_video(img_path, aud_path, vid_path, scene['narration'], i, aspect_ratio)
         if os.path.exists(vid_path): scene_videos.append(vid_path)
 
@@ -518,6 +612,7 @@ async def main():
         final_video = step4_automatic_assembly(output_dir, scene_videos, bg_music, aspect_ratio)
         if final_video:
             print(json.dumps({"video_path": os.path.abspath(final_video)}))
+            sys.stdout.flush()
 
 if __name__ == "__main__":
     asyncio.run(main())

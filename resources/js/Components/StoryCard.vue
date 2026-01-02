@@ -53,22 +53,49 @@ const statusClass = (status) => {
 const formatDate = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
-    return new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(
-        Math.ceil((date - new Date()) / (1000 * 60 * 60 * 24)),
-        'day'
-    );
+    const now = new Date();
+    const diffTime = Math.abs(now - date);
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) {
+        const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
+        if (diffHours === 0) {
+            const diffMins = Math.floor(diffTime / (1000 * 60));
+            return diffMins === 0 ? 'Just now' : `${diffMins}m ago`;
+        }
+        return `${diffHours}h ago`;
+    } else if (diffDays === 1) {
+        return 'Yesterday';
+    } else if (diffDays < 7) {
+        return `${diffDays} days ago`;
+    } else {
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+};
+
+const formatFullDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
 };
 
 const formatProcessingTime = (story) => {
     if (story.status !== 'completed' || !story.created_at || !story.updated_at) return null;
-    
+
     const created = new Date(story.created_at);
     const updated = new Date(story.updated_at);
     const durationMs = updated - created;
-    
+
     const minutes = Math.floor(durationMs / 60000);
     const seconds = Math.floor((durationMs % 60000) / 1000);
-    
+
     if (minutes > 0) {
         return `${minutes}m ${seconds}s`;
     }
@@ -114,9 +141,9 @@ const formatProcessingTime = (story) => {
             </div>
 
             <!-- Failed State Overlay -->
-            <div v-if="story.status === 'failed'" class="absolute inset-0 bg-red-900/20 dark:bg-red-900/40 flex flex-col items-center justify-center">
+            <div v-if="story.status === 'failed' || (story.status === 'completed' && !story.video_path)" class="absolute inset-0 bg-red-900/20 dark:bg-red-900/40 flex flex-col items-center justify-center">
                 <svg class="w-12 h-12 text-red-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                <span class="text-red-700 dark:text-red-400 font-bold">Generation Failed</span>
+                <span class="text-red-700 dark:text-red-400 font-bold">{{ story.status === 'completed' ? 'Video Missing' : 'Generation Failed' }}</span>
             </div>
 
             <!-- Actions Badge -->
@@ -155,12 +182,21 @@ const formatProcessingTime = (story) => {
 
                 <!-- Actions for Completed -->
                 <div v-if="story.status === 'completed'" class="space-y-3">
-                    <div class="flex items-center justify-between text-xs text-slate-400 dark:text-slate-500">
+                    <div class="flex items-center justify-between text-xs">
                         <div class="flex items-center space-x-2">
-                            <span>Created {{ formatDate(story.created_at) }}</span>
-                            <span v-if="formatProcessingTime(story)" class="text-emerald-500 font-medium">• Generated in {{ formatProcessingTime(story) }}</span>
+                            <div class="flex items-center space-x-1.5 bg-indigo-50 dark:bg-indigo-900/30 px-2.5 py-1.5 rounded-lg border border-indigo-100 dark:border-indigo-900/50">
+                                <svg class="w-3.5 h-3.5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                <span class="text-indigo-600 dark:text-indigo-400 font-semibold" :title="formatFullDate(story.created_at)">{{ formatDate(story.created_at) }}</span>
+                            </div>
+                            <div v-if="formatProcessingTime(story)" class="flex items-center space-x-1.5 bg-emerald-50 dark:bg-emerald-900/30 px-2.5 py-1.5 rounded-lg border border-emerald-100 dark:border-emerald-900/50">
+                                <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                                <span class="text-emerald-600 dark:text-emerald-400 font-semibold">{{ formatProcessingTime(story) }}</span>
+                            </div>
                         </div>
-                        <span class="font-bold text-slate-600 dark:text-slate-400 uppercase">{{ story.aspect_ratio }}</span>
+                        <div class="flex items-center space-x-1.5 bg-slate-100 dark:bg-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                            <svg class="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            <span class="text-slate-600 dark:text-slate-400 font-semibold uppercase">{{ story.aspect_ratio }}</span>
+                        </div>
                     </div>
 
                     <div class="grid grid-cols-2 gap-2">

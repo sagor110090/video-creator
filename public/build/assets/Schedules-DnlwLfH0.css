@@ -1,0 +1,1 @@
+@keyframes pulse-slow{0%,to{box-shadow:0 0 #6366f166}50%{box-shadow:0 0 0 10px #6366f100}}.animate-pulse-slow{animation:pulse-slow 3s cubic-bezier(.4,0,.6,1) infinite}

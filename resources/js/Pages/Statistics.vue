@@ -66,14 +66,17 @@ onMounted(() => {
     <Head title="Statistics" />
 
     <div class="min-h-screen bg-[#f8fafc] dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300">
-        <nav class="sticky top-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+        <nav class="sticky top-0 z-50 bg-gradient-to-r from-white via-white to-indigo-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-700/50 shadow-lg shadow-indigo-100/20 dark:shadow-none">
             <div class="container mx-auto px-4 max-w-6xl">
                 <div class="flex items-center justify-between h-16">
                     <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200/50 dark:shadow-indigo-900/20">
+                        <div class="w-10 h-10 bg-gradient-to-br from-indigo-600 via-purple-600 to-violet-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 dark:shadow-indigo-500/20 animate-pulse-slow hover:scale-105 transition-transform duration-300 cursor-pointer">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
                         </div>
-                        <span class="text-lg font-bold tracking-tight text-slate-800 dark:text-white">Video<span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600">AI</span> <span class="text-slate-400 dark:text-slate-500">Statistics</span></span>
+                        <span class="text-lg font-extrabold tracking-tight bg-gradient-to-r from-slate-800 to-indigo-600 dark:from-white dark:to-indigo-400 bg-clip-text text-transparent">Video<span class="relative">
+                            <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400">AI</span>
+                            <span class="absolute -inset-1 bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400 blur-xl opacity-30"></span>
+                        </span> <span class="text-slate-400 dark:text-slate-500 font-semibold">Statistics</span></span>
                     </div>
 
                     <div class="flex items-center gap-3">
@@ -151,7 +154,7 @@ onMounted(() => {
                                 </div>
                             </div>
                             <div v-if="day.channels.length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <div v-for="channel in day.channels" :key="channel.name" 
+                                <div v-for="channel in day.channels" :key="channel.name"
                                      class="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
                                     <div v-if="channel.thumbnail" class="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
                                         <img :src="channel.thumbnail" class="w-full h-full object-cover">
@@ -180,3 +183,18 @@ onMounted(() => {
         </main>
     </div>
 </template>
+
+<style>
+@keyframes pulse-slow {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 0 10px rgba(99, 102, 241, 0);
+    }
+}
+
+.animate-pulse-slow {
+    animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+</style>

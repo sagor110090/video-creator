@@ -55,15 +55,20 @@ class YouTubeService
         $channels = $youtube->channels->listChannels('snippet', ['mine' => true]);
         $channel = $channels->getItems()[0] ?? null;
 
+        $tokenData = [
+            'channel_title' => $channel?->getSnippet()?->getTitle(),
+            'channel_thumbnail' => $channel?->getSnippet()?->getThumbnails()?->getDefault()?->getUrl(),
+            'access_token' => json_encode($accessToken),
+            'expires_at' => now()->addSeconds($accessToken['expires_in']),
+        ];
+
+        if (!empty($accessToken['refresh_token'])) {
+            $tokenData['refresh_token'] = $accessToken['refresh_token'];
+        }
+
         return YoutubeToken::updateOrCreate(
             ['channel_id' => $channel?->getId()],
-            [
-                'channel_title' => $channel?->getSnippet()?->getTitle(),
-                'channel_thumbnail' => $channel?->getSnippet()?->getThumbnails()?->getDefault()?->getUrl(),
-                'access_token' => json_encode($accessToken),
-                'refresh_token' => $accessToken['refresh_token'] ?? null,
-                'expires_at' => now()->addSeconds($accessToken['expires_in']),
-            ]
+            $tokenData
         );
     }
 
@@ -77,15 +82,32 @@ class YouTubeService
                 $newAccessToken = $this->client->fetchAccessTokenWithRefreshToken($token->refresh_token);
 
                 if (isset($newAccessToken['error'])) {
-                    throw new \Exception('Error refreshing access token: ' . $newAccessToken['error_description']);
+                    $errorDescription = $newAccessToken['error_description'] ?? 'Unknown error';
+
+                    // Check for expired/revoked token
+                    if (stripos($errorDescription, 'expired') !== false || stripos($errorDescription, 'revoked') !== false) {
+                        Log::warning("YouTube token for channel {$token->channel_title} is expired or revoked. Deleting token.");
+                        $token->delete();
+                        throw new \Exception('YouTube connection expired. Please reconnect your channel: ' . $token->channel_title);
+                    }
+
+                    throw new \Exception('Error refreshing access token: ' . $errorDescription);
                 }
 
-                $token->update([
+                $updateData = [
                     'access_token' => json_encode($newAccessToken),
                     'expires_at' => now()->addSeconds($newAccessToken['expires_in']),
-                ]);
+                ];
+
+                if (!empty($newAccessToken['refresh_token'])) {
+                    $updateData['refresh_token'] = $newAccessToken['refresh_token'];
+                }
+
+                $token->update($updateData);
             } else {
-                throw new \Exception('Access token expired and no refresh token available.');
+                Log::warning("YouTube token for channel {$token->channel_title} expired and has no refresh token. Deleting token.");
+                $token->delete();
+                throw new \Exception('Access token expired and no refresh token available. Please reconnect your channel.');
             }
         }
     }

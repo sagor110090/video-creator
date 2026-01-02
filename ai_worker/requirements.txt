@@ -8,5 +8,19 @@ python-dotenv==1.0.1
 numpy
 opencv-python
 Pillow
+torch
+torchaudio
+chatterbox-tts
+scipy
+librosa
+transformers
+diffusers
+safetensors
+omegaconf
+resemble-perth
+conformer
+s3tokenizer
+spacy-pkuseg
+setuptools
 # FFmpeg is required but is a system dependency, not a python package.
 # These are the core packages needed for the AI worker to function.

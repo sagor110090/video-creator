@@ -4,7 +4,7 @@
     "name": "sweetalert2.esm.all"
   },
   "resources/css/app.css": {
-    "file": "assets/app-BCfR5-Kv.css",
+    "file": "assets/app-CFOiWjtQ.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -13,7 +13,7 @@
     ]
   },
   "resources/js/Pages/Login.vue": {
-    "file": "assets/Login-BsAs1a8b.js",
+    "file": "assets/Login-BUSIVlAq.js",
     "name": "Login",
     "src": "resources/js/Pages/Login.vue",
     "isDynamicEntry": true,
@@ -22,26 +22,32 @@
     ]
   },
   "resources/js/Pages/Schedules.vue": {
-    "file": "assets/Schedules-BKJ8vg19.js",
+    "file": "assets/Schedules-CiMqOcM9.js",
     "name": "Schedules",
     "src": "resources/js/Pages/Schedules.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "_sweetalert2.esm.all-BQxta0Da.js"
+    ],
+    "css": [
+      "assets/Schedules-DnlwLfH0.css"
     ]
   },
   "resources/js/Pages/Statistics.vue": {
-    "file": "assets/Statistics-M-xIPanr.js",
+    "file": "assets/Statistics-ClPTXx4E.js",
     "name": "Statistics",
     "src": "resources/js/Pages/Statistics.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js"
+    ],
+    "css": [
+      "assets/Schedules-DnlwLfH0.css"
     ]
   },
   "resources/js/Pages/Welcome.vue": {
-    "file": "assets/Welcome-DNQrGhfc.js",
+    "file": "assets/Welcome-C2Ob4RyI.js",
     "name": "Welcome",
     "src": "resources/js/Pages/Welcome.vue",
     "isDynamicEntry": true,
@@ -50,11 +56,11 @@
       "_sweetalert2.esm.all-BQxta0Da.js"
     ],
     "css": [
-      "assets/Welcome-CLNrncva.css"
+      "assets/Welcome--c1kRj_M.css"
     ]
   },
   "resources/js/app.js": {
-    "file": "assets/app-QsNny_V8.js",
+    "file": "assets/app-CvBYeO4G.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,

@@ -46,7 +46,7 @@ return [
     'youtube' => [
         'client_id' => env('YOUTUBE_CLIENT_ID'),
         'client_secret' => env('YOUTUBE_CLIENT_SECRET'),
-        'redirect_uri' => env('YOUTUBE_REDIRECT_URI', 'https://video-creator.freecoderteam.com/youtube/callback'),
+        'redirect_uri' => env('YOUTUBE_REDIRECT_URI'),
     ],
 
 ];

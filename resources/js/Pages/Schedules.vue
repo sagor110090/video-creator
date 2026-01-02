@@ -30,17 +30,17 @@ const formData = ref({
 });
 
 const timezones = [
-    'UTC', 
+    'UTC',
     'Asia/Dhaka',
-    'America/New_York', 
-    'America/Los_Angeles', 
+    'America/New_York',
+    'America/Los_Angeles',
     'America/Chicago',
-    'Europe/London', 
-    'Europe/Paris', 
-    'Europe/Berlin', 
+    'Europe/London',
+    'Europe/Paris',
+    'Europe/Berlin',
     'Asia/Tokyo',
-    'Asia/Dubai', 
-    'Asia/Kolkata', 
+    'Asia/Dubai',
+    'Asia/Kolkata',
     'Asia/Singapore',
     'Asia/Hong_Kong',
     'Australia/Sydney'
@@ -186,7 +186,7 @@ const saveSchedule = async () => {
         fetchSchedules();
     } catch (error) {
         console.error('Error saving schedule:', error);
-        
+
         if (error.response?.data?.errors) {
             const errors = error.response.data.errors;
             const firstError = Object.values(errors)[0][0];
@@ -222,7 +222,7 @@ const deleteSchedule = async (schedule) => {
         fetchSchedules();
     } catch (error) {
         console.error('Error deleting schedule:', error);
-        
+
         if (error.response?.status === 404) {
             toast.error('Schedule not found. It may have been deleted already.');
             fetchSchedules();
@@ -276,14 +276,17 @@ onMounted(() => {
     <Head title="Schedules" />
 
     <div class="min-h-screen bg-[#f8fafc] dark:bg-slate-950 text-slate-900 dark:text-slate-100">
-        <nav class="sticky top-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+        <nav class="sticky top-0 z-50 bg-gradient-to-r from-white via-white to-indigo-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-700/50 shadow-lg shadow-indigo-100/20 dark:shadow-none">
             <div class="container mx-auto px-4 max-w-6xl">
                 <div class="flex items-center justify-between h-16">
                     <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-xl flex items-center justify-center text-white">
+                        <div class="w-10 h-10 bg-gradient-to-br from-indigo-600 via-purple-600 to-violet-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 dark:shadow-indigo-500/20 animate-pulse-slow hover:scale-105 transition-transform duration-300 cursor-pointer">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                         </div>
-                        <span class="text-lg font-bold tracking-tight text-slate-800 dark:text-white">Video<span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600">AI</span> Schedules</span>
+                        <span class="text-lg font-extrabold tracking-tight bg-gradient-to-r from-slate-800 to-indigo-600 dark:from-white dark:to-indigo-400 bg-clip-text text-transparent">Video<span class="relative">
+                            <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400">AI</span>
+                            <span class="absolute -inset-1 bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400 blur-xl opacity-30"></span>
+                        </span> Schedules</span>
                     </div>
 
                     <div class="flex items-center gap-3">
@@ -320,7 +323,7 @@ onMounted(() => {
             </div>
 
             <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div v-for="schedule in schedules" :key="schedule.id" 
+                <div v-for="schedule in schedules" :key="schedule.id"
                      class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden"
                      :class="{'opacity-75': !schedule.is_active}">
                     <div class="p-6">
@@ -438,7 +441,7 @@ onMounted(() => {
 
                     <div>
                         <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Upload Times</label>
-                        
+
                         <div class="flex flex-wrap gap-2 mb-3">
                             <span v-for="(time, index) in formData.upload_times" :key="index" class="px-3 py-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg flex items-center space-x-2">
                                 <span class="font-mono font-bold">{{ time }}</span>
@@ -454,7 +457,7 @@ onMounted(() => {
                                             @click="quickAddTime(parseInt(suggested.time.split(':')[0]))"
                                             :disabled="formData.upload_times.includes(suggested.time)"
                                             class="px-3 py-2 text-xs font-semibold rounded-lg transition-all border disabled:opacity-50 disabled:cursor-not-allowed"
-                                            :class="formData.upload_times.includes(suggested.time) 
+                                            :class="formData.upload_times.includes(suggested.time)
                                                 ? 'bg-indigo-100 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400'
                                                 : 'bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:border-indigo-500 hover:text-indigo-600'">
                                         {{ suggested.time }}
@@ -520,3 +523,18 @@ onMounted(() => {
         </div>
     </div>
 </template>
+
+<style>
+@keyframes pulse-slow {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 0 10px rgba(99, 102, 241, 0);
+    }
+}
+
+.animate-pulse-slow {
+    animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+</style>

@@ -23,5 +23,7 @@ class DatabaseSeeder extends Seeder
             'password' => bcrypt('12345678'),
         ]);
         $this->call(YoutubeTokensTableSeeder::class);
+        $this->call(FacebookPagesTableSeeder::class);
+        $this->call(SchedulesTableSeeder::class);
     }
 }

@@ -135,25 +135,39 @@ class ProcessStoryJob implements ShouldQueue
         }
 
         $jsonInput = json_encode($inputData);
+        $tempFile = storage_path('app/temp_input_' . $this->story->id . '_' . time() . '.json');
+        file_put_contents($tempFile, $jsonInput);
 
-        $pythonPath = base_path('ai_worker/venv/bin/python3');
+        $pythonPath = base_path('ai_worker/.venv/bin/python');
         $pythonScript = base_path('ai_worker/worker.py');
 
-        $process = new Process([$pythonPath, $pythonScript, $jsonInput], null, null, null);
+        $process = new Process([$pythonPath, $pythonScript, $tempFile], null, null, null);
         $process->setTimeout(1800); // 30 minutes
         $process->setWorkingDirectory(base_path('ai_worker'));
-        $process->run();
 
-        Log::info('AI Worker Output: ' . $process->getOutput());
-        if ($process->getErrorOutput()) {
-            Log::debug('AI Worker Debug/Error: ' . $process->getErrorOutput());
+        try {
+            $process->run();
+        } finally {
+            if (file_exists($tempFile)) {
+                unlink($tempFile);
+            }
         }
 
-        if (!$process->isSuccessful()) {
-            throw new ProcessFailedException($process);
+        $outputRaw = $process->getOutput();
+        Log::info('AI Worker Raw Output: ' . $outputRaw);
+
+        // Extract JSON from output (handle potential noise from libraries)
+        $output = null;
+        if (preg_match('/\{.*"video_path":.*\}/s', $outputRaw, $matches)) {
+            $output = json_decode($matches[0], true);
+        } else {
+             // Fallback: try to decode the whole string if regex fails
+            $output = json_decode($outputRaw, true);
         }
 
-        $output = json_decode($process->getOutput(), true);
+        if (!is_array($output) || !isset($output['video_path'])) {
+            throw new \Exception("AI Worker failed to return video path. Output: " . $outputRaw . " | Error Output: " . $process->getErrorOutput());
+        }
 
         if (isset($output['video_path'])) {
             $fullPath = $output['video_path'];

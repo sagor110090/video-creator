@@ -7,6 +7,33 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## Development Setup (macOS)
+
+### 1. Cron Job (Scheduler)
+To run the Laravel scheduler every minute, add the following to your crontab (`crontab -e`):
+
+```cron
+* * * * * "/Users/sagor/Library/Application Support/Herd/bin/php" /Users/sagor/Code/video-creator/artisan schedule:run >> /dev/null 2>&1
+```
+
+### 2. Background Queue Worker (LaunchAgent)
+The queue is configured to run in the background using a macOS LaunchAgent.
+
+**To Start/Enable:**
+```bash
+launchctl load ~/Library/LaunchAgents/com.video-creator.queue.plist
+```
+
+**To Stop/Disable:**
+```bash
+launchctl unload ~/Library/LaunchAgents/com.video-creator.queue.plist
+```
+
+**To Monitor Logs:**
+```bash
+tail -f storage/logs/queue-worker.log
+```
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:

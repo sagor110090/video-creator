@@ -302,14 +302,17 @@ const handleLogout = () => {
 
     <div class="min-h-screen bg-[#f8fafc] dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300">
         <!-- Navigation -->
-        <nav class="sticky top-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+        <nav class="sticky top-0 z-50 bg-gradient-to-r from-white via-white to-indigo-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-700/50 shadow-lg shadow-indigo-100/20 dark:shadow-none">
             <div class="container mx-auto px-4 max-w-6xl">
                 <div class="flex items-center justify-between h-16">
                     <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200/50 dark:shadow-indigo-900/20">
+                        <div class="w-10 h-10 bg-gradient-to-br from-indigo-600 via-purple-600 to-violet-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 dark:shadow-indigo-500/20 animate-pulse-slow hover:scale-105 transition-transform duration-300 cursor-pointer">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
                         </div>
-                        <span class="text-lg font-bold tracking-tight text-slate-800 dark:text-white">Video<span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600">AI</span></span>
+                        <span class="text-lg font-extrabold tracking-tight bg-gradient-to-r from-slate-800 to-indigo-600 dark:from-white dark:to-indigo-400 bg-clip-text text-transparent">Video<span class="relative">
+                            <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400">AI</span>
+                            <span class="absolute -inset-1 bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400 blur-xl opacity-30"></span>
+                        </span></span>
                     </div>
 
                     <div class="flex items-center gap-3">
@@ -333,15 +336,15 @@ const handleLogout = () => {
                                 <svg v-if="isDark" class="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M16.243 17.243l.707.707M7.757 7.757l.707-.707M12 7a5 5 0 100 10 5 5 0 000-10z"></path></svg>
                                 <svg v-else class="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
                             </button>
-                            
+
                             <a href="/statistics" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-all group relative" title="Statistics">
                                 <svg class="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
                             </a>
-                            
+
                             <a href="/schedules" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-all group relative" title="Schedules">
                                 <svg class="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                             </a>
-                            
+
                             <button v-if="props.auth?.user" @click="handleLogout" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-all group relative" title="Logout">
                                 <svg class="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
                             </button>
@@ -611,6 +614,19 @@ const handleLogout = () => {
 </template>
 
 <style>
+@keyframes pulse-slow {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 0 10px rgba(99, 102, 241, 0);
+    }
+}
+
+.animate-pulse-slow {
+    animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
 .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
 }

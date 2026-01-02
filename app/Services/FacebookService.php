@@ -26,13 +26,21 @@ class FacebookService
             Log::info("Starting Facebook Reels upload for Story ID: {$story->id} to page: {$page->name}");
             $story->update(['facebook_upload_status' => 'uploading']);
 
-            $videoPath = public_path('storage/' . $story->video_path);
+            // Try resolving path via storage_path (preferred)
+            $videoPath = storage_path('app/public/' . $story->video_path);
+            
             if (!file_exists($videoPath) || is_dir($videoPath)) {
+                // Fallback to public_path
+                $videoPath = public_path('storage/' . $story->video_path);
+            }
+
+            if (!file_exists($videoPath) || is_dir($videoPath)) {
+                 // Fallback: maybe it's already absolute?
                 $videoPath = $story->video_path;
             }
 
             if (!file_exists($videoPath) || is_dir($videoPath)) {
-                throw new \Exception("Video file not found: {$videoPath}");
+                throw new \Exception("Video file not found. Checked: " . storage_path('app/public/' . $story->video_path) . " and " . public_path('storage/' . $story->video_path));
             }
 
             $fileSize = filesize($videoPath);
