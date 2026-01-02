@@ -25,6 +25,7 @@ const showPublishModal = ref(false);
 const publishingStory = ref(null);
 const channels = ref([]);
 const isDark = ref(false);
+const loadingChannels = ref(false);
 
 const newStory = ref({
     title: '',
@@ -49,11 +50,14 @@ const fetchStories = async (page = 1) => {
 };
 
 const fetchChannels = async () => {
+    loadingChannels.value = true;
     try {
         const response = await axios.get('/api/youtube/channels');
         channels.value = response.data;
     } catch (error) {
         console.error('Error fetching channels:', error);
+    } finally {
+        loadingChannels.value = false;
     }
 };
 
@@ -249,10 +253,19 @@ const confirmPublish = async (formData) => {
                     </div>
                 </div>
 
-                <a href="/youtube/auth" class="group flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-900 transition-all duration-200 hover:shadow-lg hover:shadow-slate-200 dark:hover:shadow-none text-xs font-bold" title="Connect YouTube">
-                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-                    YouTube
-                </a>
+                <!-- <a href="/youtube/auth" class="group flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-900 transition-all duration-200 hover:shadow-lg hover:shadow-slate-200 dark:hover:shadow-none text-xs font-bold" title="Connect YouTube">
+                    <template v-if="loadingChannels">
+                        <svg class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Loading...</span>
+                    </template>
+                    <template v-else>
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                        YouTube
+                    </template>
+                </a> -->
             </div>
         </template>
 
@@ -437,13 +450,13 @@ const confirmPublish = async (formData) => {
                         </ul>
                     </div>
 
-                    <div v-if="channels.length === 0" class="bg-indigo-600 rounded-2xl shadow-lg p-6 text-white">
+                    <!-- <div v-if="channels.length === 0" class="bg-indigo-600 rounded-2xl shadow-lg p-6 text-white">
                         <h3 class="font-bold mb-2">Grow your channel</h3>
                         <p class="text-indigo-100 text-sm mb-4 leading-relaxed">Connect your YouTube account to automatically upload your generated videos with AI-optimized metadata.</p>
                         <a href="/youtube/auth" class="block w-full text-center bg-white text-indigo-600 font-bold py-3 rounded-xl hover:bg-indigo-50 transition-colors">
                             Connect YouTube
                         </a>
-                    </div>
+                    </div> -->
                 </div>
             </div>
 
@@ -452,14 +465,14 @@ const confirmPublish = async (formData) => {
                 <div class="flex items-center justify-between mb-8">
                     <div>
                         <h2 class="text-3xl font-bold text-slate-900 dark:text-white">Your Gallery</h2>
-                        <p class="text-slate-500 dark:text-slate-400">View and manage your generated videos</p>
+                        <p class="text-slate-600 dark:text-slate-400">View and manage your generated videos</p>
                     </div>
                     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400">
                         {{ stories.length }} Total Stories
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <StoryCard v-for="story in stories" :key="story.id"
                                :story="story"
                                @regenerate="regenerateVideo"

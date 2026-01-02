@@ -161,7 +161,7 @@ onMounted(() => {
             <button @click="handleConnectChannel" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg">Connect Channel</button>
         </div>
 
-        <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-6 theme-scrollbar">
             <div v-for="channel in channels" :key="channel.id"
                  class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
                 <div class="p-6">
