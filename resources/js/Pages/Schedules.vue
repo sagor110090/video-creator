@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { Head } from '@inertiajs/vue3';
+import AppLayout from '@/Layouts/AppLayout.vue';
 import axios from 'axios';
 import { useToast } from 'vue-toast-notification';
 import Swal from 'sweetalert2';
@@ -8,13 +9,13 @@ import Swal from 'sweetalert2';
 const toast = useToast();
 const schedules = ref([]);
 const channels = ref([]);
-const facebookPages = ref([]);
 const loading = ref(false);
 const showModal = ref(false);
 const editingSchedule = ref(null);
 const showTimePicker = ref(false);
 const newTime = ref('');
-const isDark = ref(false);
+// Using a computed or simple ref for dark mode check for Swal
+const isDark = ref(document.documentElement.classList.contains('dark'));
 
 const formData = ref({
     name: '',
@@ -24,7 +25,6 @@ const formData = ref({
     timezone: 'UTC',
     upload_times: ['02:00'],
     youtube_token_id: null,
-    facebook_page_id: null,
     prompt_template: '',
     is_active: true,
 });
@@ -53,17 +53,6 @@ const styles = [
     { id: 'trade_wave', name: 'TradeWave', icon: 'M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z' },
 ];
 
-const toggleDarkMode = () => {
-    isDark.value = !isDark.value;
-    if (isDark.value) {
-        document.documentElement.classList.add('dark');
-        localStorage.setItem('theme', 'dark');
-    } else {
-        document.documentElement.classList.remove('dark');
-        localStorage.setItem('theme', 'light');
-    }
-};
-
 const fetchSchedules = async () => {
     try {
         const response = await axios.get('/api/schedules');
@@ -79,15 +68,6 @@ const fetchChannels = async () => {
         channels.value = response.data;
     } catch (error) {
         console.error('Error fetching channels:', error);
-    }
-};
-
-const fetchFacebookPages = async () => {
-    try {
-        const response = await axios.get('/api/facebook/pages');
-        facebookPages.value = response.data;
-    } catch (error) {
-        console.error('Error fetching Facebook pages:', error);
     }
 };
 
@@ -108,7 +88,6 @@ const openModal = (schedule = null) => {
             timezone: 'UTC',
             upload_times: ['02:00'],
             youtube_token_id: null,
-            facebook_page_id: null,
             prompt_template: '',
             is_active: true,
         };
@@ -258,138 +237,101 @@ const generateNow = async (schedule) => {
 };
 
 onMounted(() => {
-    const savedTheme = localStorage.getItem('theme');
-    const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-    if (savedTheme === 'dark' || (!savedTheme && systemDark)) {
-        isDark.value = true;
-        document.documentElement.classList.add('dark');
-    }
-
     fetchSchedules();
     fetchChannels();
-    fetchFacebookPages();
 });
 </script>
 
 <template>
-    <Head title="Schedules" />
+    <AppLayout>
+        <Head title="Schedules" />
 
-    <div class="min-h-screen bg-[#f8fafc] dark:bg-slate-950 text-slate-900 dark:text-slate-100">
-        <nav class="sticky top-0 z-50 bg-gradient-to-r from-white via-white to-indigo-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-700/50 shadow-lg shadow-indigo-100/20 dark:shadow-none">
-            <div class="container mx-auto px-4 max-w-6xl">
-                <div class="flex items-center justify-between h-16">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 bg-gradient-to-br from-indigo-600 via-purple-600 to-violet-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 dark:shadow-indigo-500/20 animate-pulse-slow hover:scale-105 transition-transform duration-300 cursor-pointer">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <template #header>
+            Schedules
+        </template>
+
+        <template #actions>
+            <button @click="openModal" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition-all shadow-sm flex items-center gap-2 text-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                New Schedule
+            </button>
+        </template>
+
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-slate-900 dark:text-white mb-2">Auto-Upload Scheduler</h1>
+            <p class="text-slate-600 dark:text-slate-400">Set up automatic video generation and upload schedules for your channels</p>
+        </div>
+
+        <div v-if="schedules.length === 0" class="text-center py-20 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+            <svg class="w-16 h-16 mx-auto text-slate-300 dark:text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <h3 class="text-lg font-bold text-slate-700 dark:text-slate-300 mb-2">No schedules yet</h3>
+            <p class="text-slate-500 dark:text-slate-400 mb-4">Create your first automated video schedule</p>
+            <button @click="openModal" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg">Create Schedule</button>
+        </div>
+
+        <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div v-for="schedule in schedules" :key="schedule.id"
+                    class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden"
+                    :class="{'opacity-75': !schedule.is_active}">
+                <div class="p-6">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex-1">
+                            <h3 class="text-lg font-bold text-slate-900 dark:text-white">{{ schedule.name }}</h3>
+                            <p class="text-sm text-slate-500 dark:text-slate-400 capitalize">{{ schedule.style.replace('_', ' ') }}</p>
                         </div>
-                        <span class="text-lg font-extrabold tracking-tight bg-gradient-to-r from-slate-800 to-indigo-600 dark:from-white dark:to-indigo-400 bg-clip-text text-transparent">Video<span class="relative">
-                            <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400">AI</span>
-                            <span class="absolute -inset-1 bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400 blur-xl opacity-30"></span>
-                        </span> Schedules</span>
-                    </div>
-
-                    <div class="flex items-center gap-3">
-                        <a href="/" class="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-indigo-600">Home</a>
-                        <a href="/statistics" class="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-indigo-600">Statistics</a>
-                        <button @click="toggleDarkMode" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400">
-                            <svg v-if="isDark" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M16.243 17.243l.707.707M7.757 7.757l.707-.707M12 7a5 5 0 100 10 5 5 0 000-10z"></path></svg>
-                            <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </nav>
-
-        <main class="container mx-auto px-4 max-w-6xl py-8">
-            <div class="flex items-center justify-between mb-8">
-                <div>
-                    <h1 class="text-3xl font-bold text-slate-900 dark:text-white mb-2">Auto-Upload Scheduler</h1>
-                    <p class="text-slate-600 dark:text-slate-400">Set up automatic video generation and upload schedules for your channels</p>
-                </div>
-                <button @click="openModal" class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-lg">
-                    <div class="flex items-center space-x-2">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                        <span>New Schedule</span>
-                    </div>
-                </button>
-            </div>
-
-            <div v-if="schedules.length === 0" class="text-center py-20 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
-                <svg class="w-16 h-16 mx-auto text-slate-300 dark:text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                <h3 class="text-lg font-bold text-slate-700 dark:text-slate-300 mb-2">No schedules yet</h3>
-                <p class="text-slate-500 dark:text-slate-400 mb-4">Create your first automated video schedule</p>
-                <button @click="openModal" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg">Create Schedule</button>
-            </div>
-
-            <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div v-for="schedule in schedules" :key="schedule.id"
-                     class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden"
-                     :class="{'opacity-75': !schedule.is_active}">
-                    <div class="p-6">
-                        <div class="flex items-start justify-between mb-4">
-                            <div class="flex-1">
-                                <h3 class="text-lg font-bold text-slate-900 dark:text-white">{{ schedule.name }}</h3>
-                                <p class="text-sm text-slate-500 dark:text-slate-400 capitalize">{{ schedule.style.replace('_', ' ') }}</p>
-                            </div>
-                            <div class="flex items-center space-x-2">
-                                <button @click="generateNow(schedule)" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="Generate Now">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                                </button>
-                                <button @click="toggleSchedule(schedule)" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800" :class="schedule.is_active ? 'text-green-600' : 'text-slate-400'" title="Toggle">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                                </button>
-                                <button @click="openModal(schedule)" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="Edit">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-                                </button>
-                                <button @click="deleteSchedule(schedule)" class="p-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600" title="Delete">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="space-y-3">
-                            <div class="flex items-center justify-between text-sm">
-                                <span class="text-slate-600 dark:text-slate-400">Videos per day</span>
-                                <span class="font-bold text-slate-900 dark:text-white">{{ schedule.videos_per_day }}</span>
-                            </div>
-                            <div class="flex items-center justify-between text-sm">
-                                <span class="text-slate-600 dark:text-slate-400">Format</span>
-                                <span class="font-bold text-slate-900 dark:text-white">{{ schedule.aspect_ratio === '16:9' ? 'Landscape' : 'Shorts' }}</span>
-                            </div>
-                            <div class="flex items-center justify-between text-sm">
-                                <span class="text-slate-600 dark:text-slate-400">Timezone</span>
-                                <span class="font-bold text-slate-900 dark:text-white">{{ schedule.timezone }}</span>
-                            </div>
-                            <div class="text-sm">
-                                <span class="text-slate-600 dark:text-slate-400">Upload times</span>
-                                <div class="flex flex-wrap gap-2 mt-2">
-                                    <span v-for="time in (schedule.upload_times || [])" :key="time" class="px-2 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded text-xs font-mono font-bold">{{ time }}</span>
-                                </div>
-                            </div>
-                            <div v-if="schedule.youtube_channel" class="flex items-center gap-2 text-sm">
-                                <img :src="schedule.youtube_channel.channel_thumbnail" class="w-6 h-6 rounded-full">
-                                <span class="text-slate-700 dark:text-slate-300">{{ schedule.youtube_channel.channel_title }}</span>
-                            </div>
-                            <div v-if="schedule.facebook_page" class="flex items-center gap-2 text-sm">
-                                <div class="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs">{{ schedule.facebook_page.name.charAt(0) }}</div>
-                                <span class="text-slate-700 dark:text-slate-300">{{ schedule.facebook_page.name }}</span>
-                            </div>
+                        <div class="flex items-center space-x-2">
+                            <button @click="generateNow(schedule)" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="Generate Now">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            </button>
+                            <button @click="toggleSchedule(schedule)" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800" :class="schedule.is_active ? 'text-green-600' : 'text-slate-400'" title="Toggle">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            </button>
+                            <button @click="openModal(schedule)" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="Edit">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            </button>
+                            <button @click="deleteSchedule(schedule)" class="p-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600" title="Delete">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </button>
                         </div>
                     </div>
-                    <div class="px-6 py-3 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-800">
-                        <div class="flex items-center justify-between">
-                            <span class="text-xs font-semibold" :class="schedule.is_active ? 'text-green-600' : 'text-slate-500'">
-                                {{ schedule.is_active ? '● Active' : '○ Paused' }}
-                            </span>
-                            <span class="text-xs text-slate-500">
-                                {{ Math.ceil(schedule.videos_per_day / (schedule.upload_times?.length || 1)) }} videos × {{ schedule.upload_times?.length || 0 }} times
-                            </span>
+
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-slate-600 dark:text-slate-400">Videos per day</span>
+                            <span class="font-bold text-slate-900 dark:text-white">{{ schedule.videos_per_day }}</span>
+                        </div>
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-slate-600 dark:text-slate-400">Format</span>
+                            <span class="font-bold text-slate-900 dark:text-white">{{ schedule.aspect_ratio === '16:9' ? 'Landscape' : 'Shorts' }}</span>
+                        </div>
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-slate-600 dark:text-slate-400">Timezone</span>
+                            <span class="font-bold text-slate-900 dark:text-white">{{ schedule.timezone }}</span>
+                        </div>
+                        <div class="text-sm">
+                            <span class="text-slate-600 dark:text-slate-400">Upload times</span>
+                            <div class="flex flex-wrap gap-2 mt-2">
+                                <span v-for="time in (schedule.upload_times || [])" :key="time" class="px-2 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded text-xs font-mono font-bold">{{ time }}</span>
+                            </div>
+                        </div>
+                        <div v-if="schedule.youtube_channel" class="flex items-center gap-2 text-sm">
+                            <img :src="schedule.youtube_channel.channel_thumbnail" class="w-6 h-6 rounded-full">
+                            <span class="text-slate-700 dark:text-slate-300">{{ schedule.youtube_channel.channel_title }}</span>
                         </div>
                     </div>
                 </div>
+                <div class="px-6 py-3 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-800">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold" :class="schedule.is_active ? 'text-green-600' : 'text-slate-500'">
+                            {{ schedule.is_active ? '● Active' : '○ Paused' }}
+                        </span>
+                        <span class="text-xs text-slate-500">
+                            {{ Math.ceil(schedule.videos_per_day / (schedule.upload_times?.length || 1)) }} videos × {{ schedule.upload_times?.length || 0 }} times
+                        </span>
+                    </div>
+                </div>
             </div>
-        </main>
+        </div>
 
         <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" @click.self="closeModal">
             <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -493,18 +435,6 @@ onMounted(() => {
                                     </div>
                                 </div>
                             </div>
-                            <div v-if="facebookPages.length > 0">
-                                <label class="text-xs text-slate-500 font-bold uppercase">Facebook Page</label>
-                                <div class="grid grid-cols-2 gap-2">
-                                    <div v-for="page in facebookPages" :key="page.id"
-                                         @click="formData.facebook_page_id = page.id"
-                                         :class="['flex items-center p-3 border rounded-xl cursor-pointer',
-                                                  formData.facebook_page_id === page.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700']">
-                                        <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white mr-3">{{ page.name.charAt(0) }}</div>
-                                        <span class="text-xs font-bold truncate dark:text-slate-200">{{ page.name }}</span>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                     </div>
 
@@ -521,7 +451,7 @@ onMounted(() => {
                 </div>
             </div>
         </div>
-    </div>
+    </AppLayout>
 </template>
 
 <style>

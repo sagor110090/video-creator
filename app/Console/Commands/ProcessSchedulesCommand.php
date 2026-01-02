@@ -64,7 +64,6 @@ class ProcessSchedulesCommand extends Command
                         'youtube_description' => $storyData['youtube_description'],
                         'youtube_tags' => $storyData['youtube_tags'],
                         'youtube_token_id' => $schedule->youtube_token_id,
-                        'facebook_page_id' => $schedule->facebook_page_id,
                         'is_from_scheduler' => true,
                     ]);
 

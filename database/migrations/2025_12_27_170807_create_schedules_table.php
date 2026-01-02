@@ -13,7 +13,6 @@ return new class extends Migration
     {
         Schema::create('schedules', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->string('name');
             $table->string('style');
             $table->string('aspect_ratio');
@@ -22,7 +21,6 @@ return new class extends Migration
             $table->json('upload_times');
             $table->boolean('is_active')->default(true);
             $table->foreignId('youtube_token_id')->nullable()->constrained('youtube_tokens')->onDelete('set null');
-            $table->foreignId('facebook_page_id')->nullable()->constrained('facebook_pages')->onDelete('set null');
             $table->text('prompt_template')->nullable();
             $table->json('last_generated_dates')->nullable();
             $table->timestamps();

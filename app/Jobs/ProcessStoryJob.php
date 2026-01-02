@@ -8,7 +8,6 @@ use Illuminate\Foundation\Queue\Queueable;
 use App\Models\Story;
 use App\Models\Scene;
 use App\Jobs\UploadToYouTubeJob;
-use App\Jobs\UploadToFacebookJob;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\Process\Process;
@@ -55,11 +54,6 @@ class ProcessStoryJob implements ShouldQueue
                 if ($this->story->youtube_token_id) {
                     Log::info("Scheduler: Dispatching YouTube upload job for Story ID: {$this->story->id}");
                     UploadToYouTubeJob::dispatch($this->story);
-                }
-
-                if ($this->story->facebook_page_id && $this->story->facebookPage) {
-                    Log::info("Scheduler: Dispatching Facebook upload job for Story ID: {$this->story->id}");
-                    UploadToFacebookJob::dispatch($this->story, $this->story->facebookPage);
                 }
             }
         } catch (\Exception $e) {
@@ -142,38 +136,39 @@ class ProcessStoryJob implements ShouldQueue
         $pythonScript = base_path('ai_worker/worker.py');
 
         $process = new Process([$pythonPath, $pythonScript, $tempFile], null, null, null);
-        $process->setTimeout(1800); // 30 minutes
+        $process->setTimeout(3600); // 60 minutes - increased from 30 minutes
+        $process->setIdleTimeout(1800); // 30 minutes idle timeout
         $process->setWorkingDirectory(base_path('ai_worker'));
 
         try {
             $process->run();
-        } finally {
-            if (file_exists($tempFile)) {
-                unlink($tempFile);
+
+            if (!$process->isSuccessful()) {
+                throw new ProcessFailedException($process);
             }
-        }
 
-        $outputRaw = $process->getOutput();
-        Log::info('AI Worker Raw Output: ' . $outputRaw);
+            $outputRaw = $process->getOutput();
+            Log::info('AI Worker Raw Output: ' . $outputRaw);
 
-        // Extract JSON from output (handle potential noise from libraries)
-        $output = null;
-        if (preg_match('/\{.*"video_path":.*\}/s', $outputRaw, $matches)) {
-            $output = json_decode($matches[0], true);
-        } else {
-             // Fallback: try to decode the whole string if regex fails
-            $output = json_decode($outputRaw, true);
-        }
+            $errorOutput = $process->getErrorOutput();
+            if (!empty($errorOutput)) {
+                Log::warning('AI Worker Error Output: ' . $errorOutput);
+            }
 
-        if (!is_array($output) || !isset($output['video_path'])) {
-            throw new \Exception("AI Worker failed to return video path. Output: " . $outputRaw . " | Error Output: " . $process->getErrorOutput());
-        }
+            $output = null;
+            if (preg_match('/\{.*"video_path":.*\}/s', $outputRaw, $matches)) {
+                $output = json_decode($matches[0], true);
+            } else {
+                $output = json_decode($outputRaw, true);
+            }
 
-        if (isset($output['video_path'])) {
+            if (!is_array($output) || !isset($output['video_path'])) {
+                throw new \Exception("AI Worker failed to return video path. Output: " . $outputRaw . " | Error Output: " . $errorOutput);
+            }
+
             $fullPath = $output['video_path'];
             $storagePrefix = storage_path('app/public/');
 
-            // Ensure we are saving the file path, not the directory path
             if (is_file($fullPath)) {
                 $relativePath = str_replace($storagePrefix, '', $fullPath);
                 $this->story->update([
@@ -181,6 +176,15 @@ class ProcessStoryJob implements ShouldQueue
                 ]);
             } else {
                 throw new \Exception("AI Worker reported success but video file not found at: " . $fullPath);
+            }
+        } catch (ProcessFailedException $e) {
+            $errorOutput = $process->getErrorOutput();
+            $exitCode = $process->getExitCode();
+            Log::error("AI Worker Process Failed. Exit Code: {$exitCode}. Error: " . $errorOutput);
+            throw new \Exception("AI Worker process failed with exit code {$exitCode}: " . $errorOutput);
+        } finally {
+            if (file_exists($tempFile)) {
+                unlink($tempFile);
             }
         }
     }

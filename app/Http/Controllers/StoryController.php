@@ -3,10 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Story;
-use App\Models\FacebookPage;
 use App\Jobs\ProcessStoryJob;
 use App\Jobs\UploadToYouTubeJob;
-use App\Jobs\UploadToFacebookJob;
 use App\Services\AiStoryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -98,29 +96,6 @@ class StoryController extends Controller
         UploadToYouTubeJob::dispatch($story);
 
         return response()->json(['message' => 'Upload queued successfully.']);
-    }
-
-    public function uploadToFacebook(Request $request, Story $story)
-    {
-        if ($story->status !== 'completed') {
-            return response()->json(['error' => 'Video generation is not completed yet.'], 400);
-        }
-
-        $request->validate([
-            'facebook_page_id' => 'required|exists:facebook_pages,id'
-        ]);
-
-        $page = FacebookPage::find($request->facebook_page_id);
-
-        if (!$page) {
-            return response()->json(['error' => 'Facebook page not found.'], 404);
-        }
-
-        $story->update(['facebook_page_id' => $page->id]);
-
-        UploadToFacebookJob::dispatch($story, $page);
-
-        return response()->json(['message' => 'Facebook upload queued successfully.']);
     }
 
     public function generateMetadata(Story $story, AiStoryService $aiService)

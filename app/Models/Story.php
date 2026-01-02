@@ -23,15 +23,10 @@ class Story extends Model
         'youtube_upload_status',
         'youtube_token_id',
         'youtube_error',
-        'facebook_page_id',
-        'facebook_video_id',
-        'is_uploaded_to_facebook',
-        'facebook_upload_status',
-        'facebook_error',
         'is_from_scheduler',
     ];
 
-    protected $with = ['youtubeChannel', 'facebookPage'];
+    protected $with = ['youtubeChannel'];
 
     public function scenes()
     {
@@ -41,10 +36,5 @@ class Story extends Model
     public function youtubeChannel()
     {
         return $this->belongsTo(YoutubeToken::class, 'youtube_token_id');
-    }
-
-    public function facebookPage()
-    {
-        return $this->belongsTo(FacebookPage::class, 'facebook_page_id');
     }
 }

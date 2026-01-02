@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('stories', function (Blueprint $table) {
-            $table->boolean('is_from_scheduler')->default(false)->after('facebook_error');
+            $table->boolean('is_from_scheduler')->default(false);
         });
     }
 

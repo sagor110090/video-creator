@@ -72,6 +72,34 @@ class YouTubeService
         );
     }
 
+    public function updateToken(YoutubeToken $token, $code)
+    {
+        $accessToken = $this->client->fetchAccessTokenWithAuthCode($code);
+
+        if (isset($accessToken['error'])) {
+            throw new \Exception('Error fetching access token: ' . $accessToken['error_description']);
+        }
+
+        $this->client->setAccessToken($accessToken);
+        $youtube = new YouTube($this->client);
+        $channels = $youtube->channels->listChannels('snippet', ['mine' => true]);
+        $channel = $channels->getItems()[0] ?? null;
+
+        $tokenData = [
+            'channel_title' => $channel?->getSnippet()?->getTitle(),
+            'channel_thumbnail' => $channel?->getSnippet()?->getThumbnails()?->getDefault()?->getUrl(),
+            'access_token' => json_encode($accessToken),
+            'expires_at' => now()->addSeconds($accessToken['expires_in']),
+        ];
+
+        if (!empty($accessToken['refresh_token'])) {
+            $tokenData['refresh_token'] = $accessToken['refresh_token'];
+        }
+
+        $token->update($tokenData);
+        return $token;
+    }
+
     private function refreshAccessTokenIfExpired(YoutubeToken $token)
     {
         $accessToken = json_decode($token->access_token, true);
@@ -109,6 +137,47 @@ class YouTubeService
                 $token->delete();
                 throw new \Exception('Access token expired and no refresh token available. Please reconnect your channel.');
             }
+        }
+    }
+
+    public function refreshToken(YoutubeToken $token)
+    {
+        try {
+            $accessToken = json_decode($token->access_token, true);
+            $this->client->setAccessToken($accessToken);
+
+            if (!$this->client->isAccessTokenExpired()) {
+                return true;
+            }
+
+            if (!$token->refresh_token) {
+                Log::warning("YouTube token for channel {$token->channel_title} has no refresh token");
+                return false;
+            }
+
+            $newAccessToken = $this->client->fetchAccessTokenWithRefreshToken($token->refresh_token);
+
+            if (isset($newAccessToken['error'])) {
+                Log::error("Error refreshing token for {$token->channel_title}: " . $newAccessToken['error_description']);
+                return false;
+            }
+
+            $updateData = [
+                'access_token' => json_encode($newAccessToken),
+                'expires_at' => now()->addSeconds($newAccessToken['expires_in']),
+            ];
+
+            if (!empty($newAccessToken['refresh_token'])) {
+                $updateData['refresh_token'] = $newAccessToken['refresh_token'];
+            }
+
+            $token->update($updateData);
+            Log::info("Successfully refreshed token for {$token->channel_title}");
+            return true;
+
+        } catch (\Exception $e) {
+            Log::error("Error refreshing token for {$token->channel_title}: " . $e->getMessage());
+            return false;
         }
     }
 

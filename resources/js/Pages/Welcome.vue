@@ -3,6 +3,7 @@ import { ref, onMounted, watch } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { useForm } from '@inertiajs/vue3';
 import axios from 'axios';
+import AppLayout from '@/Layouts/AppLayout.vue';
 import StoryCard from '@/Components/StoryCard.vue';
 import PublishModal from '@/Components/PublishModal.vue';
 import { useToast } from 'vue-toast-notification';
@@ -23,19 +24,7 @@ const showYoutubeSettings = ref(false);
 const showPublishModal = ref(false);
 const publishingStory = ref(null);
 const channels = ref([]);
-const facebookPages = ref([]);
 const isDark = ref(false);
-
-const toggleDarkMode = () => {
-    isDark.value = !isDark.value;
-    if (isDark.value) {
-        document.documentElement.classList.add('dark');
-        localStorage.setItem('theme', 'dark');
-    } else {
-        document.documentElement.classList.remove('dark');
-        localStorage.setItem('theme', 'light');
-    }
-};
 
 const newStory = ref({
     title: '',
@@ -68,28 +57,10 @@ const fetchChannels = async () => {
     }
 };
 
-const fetchFacebookPages = async () => {
-    try {
-        const response = await axios.get('/api/facebook/pages');
-        facebookPages.value = response.data;
-    } catch (error) {
-        console.error('Error fetching Facebook pages:', error);
-    }
-};
-
 onMounted(() => {
-    // Check for saved theme or system preference
-    const savedTheme = localStorage.getItem('theme');
-    const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-    if (savedTheme === 'dark' || (!savedTheme && systemDark)) {
-        isDark.value = true;
-        document.documentElement.classList.add('dark');
-    }
-
+    isDark.value = document.documentElement.classList.contains('dark');
     fetchStories();
     fetchChannels();
-    fetchFacebookPages();
     setInterval(() => fetchStories(pagination.value?.current_page || 1), 5000);
 });
 
@@ -242,41 +213,6 @@ const openPublishModal = (story) => {
     showPublishModal.value = true;
 };
 
-const uploadToFacebook = async (story) => {
-    if (facebookPages.value.length === 0) {
-        toast.error('Please connect a Facebook page first.');
-        return;
-    }
-
-    const { value: facebookPageId } = await Swal.fire({
-        title: 'Select Facebook Page',
-        input: 'select',
-        inputOptions: facebookPages.value.reduce((acc, page) => {
-            acc[page.id] = page.name;
-            return acc;
-        }, {}),
-        inputPlaceholder: 'Choose a page...',
-        showCancelButton: true,
-        confirmButtonColor: '#4f46e5',
-        cancelButtonColor: '#64748b',
-        background: isDark.value ? '#0f172a' : '#ffffff',
-        color: isDark.value ? '#f8fafc' : '#0f172a'
-    });
-
-    if (!facebookPageId) return;
-
-    try {
-        await axios.post(`/api/stories/${story.id}/upload-facebook`, {
-            facebook_page_id: facebookPageId
-        });
-        toast.success('Facebook upload queued successfully!');
-        fetchStories();
-    } catch (error) {
-        console.error('Error uploading to Facebook:', error);
-        toast.error(error.response?.data?.error || 'Failed to upload to Facebook.');
-    }
-};
-
 const confirmPublish = async (formData) => {
     try {
         showPublishModal.value = false;
@@ -291,99 +227,46 @@ const confirmPublish = async (formData) => {
         toast.error('Failed to start upload. Please try again.');
     }
 };
-
-const handleLogout = () => {
-    useForm({}).post('/logout');
-};
 </script>
 
 <template>
-    <Head title="AI Video Storyteller" />
+    <AppLayout>
+        <Head title="Dashboard" />
 
-    <div class="min-h-screen bg-[#f8fafc] dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300">
-        <!-- Navigation -->
-        <nav class="sticky top-0 z-50 bg-gradient-to-r from-white via-white to-indigo-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-700/50 shadow-lg shadow-indigo-100/20 dark:shadow-none">
-            <div class="container mx-auto px-4 max-w-6xl">
-                <div class="flex items-center justify-between h-16">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 bg-gradient-to-br from-indigo-600 via-purple-600 to-violet-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 dark:shadow-indigo-500/20 animate-pulse-slow hover:scale-105 transition-transform duration-300 cursor-pointer">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-                        </div>
-                        <span class="text-lg font-extrabold tracking-tight bg-gradient-to-r from-slate-800 to-indigo-600 dark:from-white dark:to-indigo-400 bg-clip-text text-transparent">Video<span class="relative">
-                            <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400">AI</span>
-                            <span class="absolute -inset-1 bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400 blur-xl opacity-30"></span>
-                        </span></span>
-                    </div>
+        <template #header>
+            Dashboard
+        </template>
 
-                    <div class="flex items-center gap-3">
-                        <div v-if="channels.length > 0 || facebookPages.length > 0" class="hidden lg:flex items-center -space-x-2.5 pr-3 border-r border-slate-200 dark:border-slate-700">
-                            <div class="flex items-center -space-x-2.5">
-                                <img v-for="channel in channels.slice(0, 2)" :key="'yt-'+channel.id" :src="channel.channel_thumbnail" :title="channel.channel_title" class="w-8 h-8 rounded-full border-2 border-white dark:border-slate-800 ring-2 ring-slate-100 dark:ring-slate-700 cursor-pointer transition-all hover:scale-110 hover:z-10 hover:ring-indigo-400">
-                                <template v-for="page in facebookPages.slice(0, 2)" :key="'fb-'+page.id">
-                                    <img v-if="page.picture_url" :src="page.picture_url" :title="page.name" class="w-8 h-8 rounded-full border-2 border-white dark:border-slate-800 ring-2 ring-slate-100 dark:ring-slate-700 cursor-pointer transition-all hover:scale-110 hover:z-10 hover:ring-blue-400">
-                                    <div v-else :title="page.name" class="w-8 h-8 rounded-full border-2 border-white dark:border-slate-800 ring-2 ring-slate-100 dark:ring-slate-700 flex items-center justify-center bg-gradient-to-br from-blue-500 to-blue-600 text-white text-xs font-bold cursor-pointer transition-all hover:scale-110 hover:z-10 hover:ring-blue-400">
-                                        {{ page.name.charAt(0) }}
-                                    </div>
-                                </template>
-                                <div v-if="(channels.length + facebookPages.length) > 4" class="w-8 h-8 rounded-full border-2 border-white dark:border-slate-800 ring-2 ring-slate-100 dark:ring-slate-700 flex items-center justify-center bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold">
-                                    +{{ channels.length + facebookPages.length - 4 }}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="flex items-center gap-1.5">
-                            <button @click="toggleDarkMode" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-all group relative">
-                                <svg v-if="isDark" class="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M16.243 17.243l.707.707M7.757 7.757l.707-.707M12 7a5 5 0 100 10 5 5 0 000-10z"></path></svg>
-                                <svg v-else class="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
-                            </button>
-
-                            <a href="/statistics" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-all group relative" title="Statistics">
-                                <svg class="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-                            </a>
-
-                            <a href="/schedules" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-all group relative" title="Schedules">
-                                <svg class="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                            </a>
-
-                            <button v-if="props.auth?.user" @click="handleLogout" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-all group relative" title="Logout">
-                                <svg class="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
-                            </button>
-
-                            <a href="/youtube/auth" class="group flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-900 transition-all duration-200 hover:shadow-lg hover:shadow-slate-200 dark:hover:shadow-none" title="Connect YouTube">
-                                <svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-                                <span class="hidden sm:inline text-xs font-semibold">YouTube</span>
-                            </a>
-
-                            <a href="/oauth/facebook/auth" class="group flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white transition-all duration-200 hover:shadow-lg hover:shadow-blue-200 dark:hover:shadow-none" title="Connect Facebook">
-                                <svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-                                <span class="hidden sm:inline text-xs font-semibold">Facebook</span>
-                            </a>
+        <template #actions>
+            <div class="flex items-center gap-3">
+                 <!-- Channel Icons Logic here if needed -->
+                 <div v-if="channels.length > 0" class="hidden lg:flex items-center -space-x-2.5 pr-3 border-r border-slate-200 dark:border-slate-700">
+                    <div class="flex items-center -space-x-2.5">
+                        <img v-for="channel in channels.slice(0, 4)" :key="'yt-'+channel.id" :src="channel.channel_thumbnail" :title="channel.channel_title" class="w-8 h-8 rounded-full border-2 border-white dark:border-slate-800 ring-2 ring-slate-100 dark:ring-slate-700 cursor-pointer transition-all hover:scale-110 hover:z-10 hover:ring-indigo-400">
+                        <div v-if="channels.length > 4" class="w-8 h-8 rounded-full border-2 border-white dark:border-slate-800 ring-2 ring-slate-100 dark:ring-slate-700 flex items-center justify-center bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold">
+                            +{{ channels.length - 4 }}
                         </div>
                     </div>
                 </div>
+
+                <a href="/youtube/auth" class="group flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-900 transition-all duration-200 hover:shadow-lg hover:shadow-slate-200 dark:hover:shadow-none text-xs font-bold" title="Connect YouTube">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                    YouTube
+                </a>
             </div>
-        </nav>
+        </template>
 
-        <main class="container mx-auto px-4 max-w-6xl pb-20">
-            <!-- Hero -->
-            <section class="text-center mb-12">
-                <h1 class="text-4xl md:text-5xl font-extrabold text-slate-900 dark:text-white mb-4 tracking-tight">
-                    Turn your ideas into <span class="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">stunning videos</span>
-                </h1>
-                <p class="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-                    The fastest way to create animated stories, science explainers, and entertainment news using advanced AI.
-                </p>
-            </section>
+        <!-- Main Dashboard Content -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <!-- Creator Form -->
+            <div class="lg:col-span-8 space-y-8">
+                <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+                    <div class="p-6 md:p-8">
+                        <div class="flex items-center justify-between mb-8">
+                            <h2 class="text-2xl font-bold text-slate-800 dark:text-white">Create New Story</h2>
+                            <span class="text-xs font-semibold px-3 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full">AI-Powered</span>
+                        </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                <!-- Creator Form -->
-                <div class="lg:col-span-8 space-y-8">
-                    <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
-                        <div class="p-6 md:p-8">
-                            <div class="flex items-center justify-between mb-8">
-                                <h2 class="text-2xl font-bold text-slate-800 dark:text-white">Create New Story</h2>
-                                <span class="text-xs font-semibold px-3 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full">AI-Powered</span>
-                            </div>
 
                             <!-- Content Style Grid -->
                             <div class="mb-8">
@@ -581,8 +464,7 @@ const handleLogout = () => {
                                :story="story"
                                @regenerate="regenerateVideo"
                                @delete="deleteStory"
-                               @upload="openPublishModal"
-                               @upload-facebook="uploadToFacebook" />
+                               @upload="openPublishModal" />
                 </div>
 
                 <!-- Pagination -->
@@ -603,14 +485,13 @@ const handleLogout = () => {
                     </button>
                 </div>
             </section>
-        </main>
 
         <PublishModal :show="showPublishModal"
                       :story="publishingStory"
                       :channels="channels"
                       @close="showPublishModal = false"
                       @confirm="confirmPublish" />
-    </div>
+    </AppLayout>
 </template>
 
 <style>

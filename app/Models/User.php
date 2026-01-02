@@ -52,9 +52,4 @@ class User extends Authenticatable
     {
         return $this->hasMany(YouTubeChannel::class);
     }
-
-    public function facebookPages(): HasMany
-    {
-        return $this->hasMany(FacebookPage::class);
-    }
 }

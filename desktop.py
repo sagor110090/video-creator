@@ -76,17 +76,19 @@ if __name__ == "__main__":
     print("Waiting for services to initialize...")
     time.sleep(3)
 
-    # Create the webview window
+    # Create the webview window with debugging enabled
     window = webview.create_window(
         'AI Video Creator',
         'http://127.0.0.1:8000',
         width=1200,
         height=800,
-        min_size=(1000, 700)
+        min_size=(1000, 700),
+        text_select=False,
+        frameless=False
     )
 
-    # Start the webview
-    webview.start()
+    # Start the webview with debug enabled
+    webview.start(debug=True)
 
     # When window is closed, cleanup
     cleanup(None, None)

@@ -11,8 +11,7 @@ class ScheduleController extends Controller
 {
     public function index(Request $request)
     {
-        $schedules = Schedule::with(['youtubeChannel', 'facebookPage'])
-            ->where('user_id', auth()->id())
+        $schedules = Schedule::with(['youtubeChannel'])
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -32,11 +31,9 @@ class ScheduleController extends Controller
             'upload_times' => 'required|array|min:1',
             'upload_times.*' => 'required|string|date_format:H:i',
             'youtube_token_id' => 'nullable|integer|exists:youtube_tokens,id',
-            'facebook_page_id' => 'nullable|integer|exists:facebook_pages,id',
             'prompt_template' => 'nullable|string',
         ]);
 
-        $validated['user_id'] = auth()->id();
         $validated['is_active'] = true;
         $validated['last_generated_dates'] = [];
 
@@ -44,19 +41,19 @@ class ScheduleController extends Controller
 
         $schedule = Schedule::create($validated);
 
-        return response()->json($schedule->load(['youtubeChannel', 'facebookPage']), 201);
+        return response()->json($schedule->load(['youtubeChannel']), 201);
     }
 
     public function show($id)
     {
-        $schedule = Schedule::where('id', $id)->where('user_id', auth()->id())->firstOrFail();
+        $schedule = Schedule::findOrFail($id);
 
-        return response()->json($schedule->load(['youtubeChannel', 'facebookPage']));
+        return response()->json($schedule->load(['youtubeChannel']));
     }
 
     public function update(Request $request, $id)
     {
-        $schedule = Schedule::where('id', $id)->where('user_id', auth()->id())->firstOrFail();
+        $schedule = Schedule::findOrFail($id);
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -67,19 +64,18 @@ class ScheduleController extends Controller
             'upload_times' => 'sometimes|array|min:1',
             'upload_times.*' => 'sometimes|string|date_format:H:i',
             'youtube_token_id' => 'nullable|integer|exists:youtube_tokens,id',
-            'facebook_page_id' => 'nullable|integer|exists:facebook_pages,id',
             'prompt_template' => 'nullable|string',
             'is_active' => 'sometimes|boolean',
         ]);
 
         $schedule->update($validated);
 
-        return response()->json($schedule->load(['youtubeChannel', 'facebookPage']));
+        return response()->json($schedule->load(['youtubeChannel']));
     }
 
     public function destroy($id)
     {
-        $schedule = Schedule::where('id', $id)->where('user_id', auth()->id())->firstOrFail();
+        $schedule = Schedule::findOrFail($id);
 
         $schedule->delete();
 
@@ -88,17 +84,15 @@ class ScheduleController extends Controller
 
     public function generateVideo($id)
     {
-        $schedule = Schedule::where('id', $id)->where('user_id', auth()->id())->firstOrFail();
+        $schedule = Schedule::findOrFail($id);
 
         $story = Story::create([
-            'user_id' => auth()->id(),
             'title' => $schedule->name . ' - ' . now()->format('Y-m-d H:i'),
             'content' => $schedule->prompt_template ?? 'Generate an interesting story',
             'style' => $schedule->style,
             'aspect_ratio' => $schedule->aspect_ratio,
             'status' => 'pending',
             'youtube_token_id' => $schedule->youtube_token_id,
-            'facebook_page_id' => $schedule->facebook_page_id,
             'is_from_scheduler' => true,
         ]);
 
