@@ -8,6 +8,7 @@ use Illuminate\Foundation\Queue\Queueable;
 use App\Models\Story;
 use App\Models\Scene;
 use App\Jobs\UploadToYouTubeJob;
+use App\Services\AiStoryService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\Process\Process;
@@ -48,14 +49,7 @@ class ProcessStoryJob implements ShouldQueue
 
             $this->story->update(['status' => 'completed']);
 
-            // STEP 5: Auto-upload only if generated via Scheduler
-            // Check if the story was created by the scheduler (it will have a user_id from the schedule but no manual trigger)
-            if ($this->story->is_from_scheduler) {
-                if ($this->story->youtube_token_id) {
-                    Log::info("Scheduler: Dispatching YouTube upload job for Story ID: {$this->story->id}");
-                    UploadToYouTubeJob::dispatch($this->story);
-                }
-            }
+
         } catch (\Exception $e) {
             Log::error('Video processing failed: ' . $e->getMessage());
             $this->story->update(['status' => 'failed']);
@@ -85,20 +79,81 @@ class ProcessStoryJob implements ShouldQueue
             $visualPrefix = "finance, business, ";
         }
 
-        $storyboard = [];
+        // 1. Filter valid sentences first
+        $validSentences = [];
         foreach ($sentences as $sentence) {
             $sentence = trim($sentence);
             if (strlen($sentence) < 10) continue;
+            $validSentences[] = $sentence;
+        }
 
-            // Generate a clean, search-friendly prompt
-            // Focus on the core sentence content without AI jargon
+        // 2. Generate AI Prompts in Batch
+        $aiPrompts = [];
+        try {
+            $aiService = new AiStoryService();
+            $aiPrompts = $aiService->generateImagePrompts($validSentences);
+        } catch (\Exception $e) {
+            Log::error("Failed to generate AI image prompts: " . $e->getMessage());
+            // Fallback will happen in the loop below
+        }
+
+        // 3. Build Storyboard
+        $storyboard = [];
+        foreach ($validSentences as $index => $sentence) {
+
+            // Get AI prompt or fall back to regex cleaner
+            if (isset($aiPrompts[$index]) && $aiPrompts[$index] !== $sentence) {
+                Log::info("Using AI Image Prompt for Scene {$index}: '{$aiPrompts[$index]}'");
+                $finalPrompt = $aiPrompts[$index];
+            } else {
+                Log::info("AI Prompt missing/same for Scene {$index}. Using Fallback: '{$this->cleanImagePrompt($sentence)}'");
+                $finalPrompt = $this->cleanImagePrompt($sentence);
+            }
+
             $storyboard[] = [
                 'narration' => $sentence,
-                'image_prompt' => $visualPrefix . $sentence,
+                'image_prompt' => $visualPrefix . $finalPrompt,
             ];
         }
 
         return array_slice($storyboard, 0, 50);
+    }
+
+    /**
+     * Cleans up narration text to create better image search prompts.
+     * Removes conversational fillers and focuses on nouns/visuals.
+     */
+    private function cleanImagePrompt($text)
+    {
+        // 1. Remove common conversational fillers
+        $fillers = [
+            'so,', 'actually,', 'basically,', 'literally,', 'you see,', 'I mean,',
+            'imagine if', 'imagine', 'think about', 'picture this', 'did you know',
+            'what if', 'believe it or not', 'in fact', 'interestingly',
+            'however', 'moreover', 'furthermore', 'consequently',
+            'it turns out', 'as a result', 'in the end',
+            'so here is my question', 'so heres my question', 'here is my question', 'heres my question',
+            'so ', 'if we '
+        ];
+
+        $clean = str_ireplace($fillers, '', $text);
+
+        // 2. Remove non-visual abstract words (basic list)
+        // This is a heuristic; for better results we'd need NLP
+        $clean = preg_replace('/\b(really|very|just|only|maybe|perhaps|probably)\b/i', '', $clean);
+
+        // 3. Remove punctuation that might confuse search
+        $clean = preg_replace('/[?!.,;:"\']/', '', $clean);
+
+        // 4. Clean up extra spaces
+        $clean = trim(preg_replace('/\s+/', ' ', $clean));
+
+        // 5. If result is too short, fall back to original (minus basic punctuation)
+        if (strlen($clean) < 5) {
+            return trim(preg_replace('/[?!.,;:"\']/', '', $text));
+        }
+
+        return $clean;
     }
 
     /**

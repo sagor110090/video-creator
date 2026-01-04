@@ -288,7 +288,7 @@ class AiStoryService
     public function searchNews(string $query): array
     {
         $prompt = "Act as a news search engine. For the query: '{$query}', provide 3 realistic and recent-sounding news snippets.
-        If the query is about Hollywood/Entertainment, focus on stars like Dakota Johnson or Jamie Dornan.
+        If the query is about Hollywood/Entertainment, focus on relevant celebrities, movies, shows, and entertainment industry news.
         If the query is about Trading/Finance/Market, focus on stocks, crypto, or economic updates.
         Each snippet should have a catchy 'title' and a 'snippet' (summary).
         Ensure the news sounds current and exciting.
@@ -345,10 +345,99 @@ class AiStoryService
             }
 
             return [
-                ['title' => "Dakota Johnson Spotted in London", 'snippet' => "The star was seen filming her latest project in central London, looking as stylish as ever."],
-                ['title' => "Jamie Dornan's New Project Revealed", 'snippet' => "Sources confirm Jamie Dornan has signed on for a high-stakes thriller filming this summer."],
-                ['title' => "Fifty Shades Duo Reunite?", 'snippet' => "Rumors are swirling about a potential project featuring both Dakota and Jamie. Fans are ecstatic."]
+                ['title' => "Breaking: Major Film Announced", 'snippet' => "A highly anticipated project has been officially confirmed, featuring top talent from across the industry."],
+                ['title' => "Celebrity News Update", 'snippet' => "The entertainment world is buzzing with the latest developments in film and television."],
+                ['title' => "Box Office Records Shattered", 'snippet' => "The latest blockbuster has exceeded all expectations, setting new records for weekend earnings."]
             ];
         }
+    }
+
+    public function generateImagePrompts(array $narrations): array
+    {
+        // Chunk narrations to avoid token limits (max 20 at a time)
+        $chunks = array_chunk($narrations, 20);
+        $allPrompts = [];
+
+        foreach ($chunks as $chunk) {
+            $prompt = "You are a visual director for a video production.
+            For each of the following narration segments, generate a precise, high-quality image search query.
+            - The query will be used to search for stock footage/photos (Pexels, Unsplash).
+            - Extract the main visual subject.
+            - Focus on nouns, setting, and action.
+            - REMOVE conversational filler (e.g. 'Imagine if', 'So', 'Basically').
+            - If the text is abstract, provide a metaphorical visual (e.g. 'Stock market crash' -> 'Red graph arrow going down').
+            - Output specific keywords (e.g. 'Golden retriever running grass' instead of 'A dog running').
+
+            INPUT NARRATIONS:
+            " . json_encode($chunk) . "
+
+            Format your response as a JSON object where keys are the indices (0, 1, 2...) matching the input array order, and values are the search prompts.
+            Example:
+            {
+                \"0\": \"futuristic city skyline night\",
+                \"1\": \"scientist looking at microscope\",
+                \"2\": \"bitcoin gold coin pile\"
+            }";
+
+            try {
+                $payload = [
+                    'model' => $this->model,
+                    'messages' => [
+                        ['role' => 'system', 'content' => 'You are an expert visual prompt engineer. Output ONLY valid JSON.'],
+                        ['role' => 'user', 'content' => $prompt]
+                    ],
+                    'temperature' => 0.7,
+                ];
+
+                if ($this->provider === 'groq' || $this->provider === 'deepseek') {
+                    $payload['response_format'] = ['type' => 'json_object'];
+                }
+
+                $response = Http::withHeaders([
+                    'Authorization' => 'Bearer ' . $this->apiKey,
+                    'Content-Type' => 'application/json',
+                ])->post($this->baseUrl, $payload);
+
+                if ($response->failed()) {
+                    throw new \Exception("Image prompt generation failed");
+                }
+
+                $data = $response->json();
+                $content = $data['choices'][0]['message']['content'];
+
+                // Clean markdown code blocks if present
+                $content = preg_replace('/^```json\s*|\s*```$/', '', trim($content));
+
+                $prompts = json_decode($content, true);
+
+                if (is_array($prompts)) {
+                    // Use array_values to ensure we just get the list of prompts
+                    // However, we need to map them back to the original chunk indices if the LLM messed up keys.
+                    // But usually, array_values of the JSON object (if it's an ordered map) works.
+                    // Better: iterate through chunk keys.
+                    foreach ($chunk as $index => $text) {
+                        // The LLM might use the original index or 0-based index relative to chunk
+                        // Let's assume 0-based relative to chunk for simplicity in prompt instructions
+                        // But wait, array_chunk preserves keys? No, unless true is passed.
+                        // Default array_chunk reindexes keys 0..n.
+                        $allPrompts[] = $prompts[$index] ?? $prompts[(string)$index] ?? $text;
+                    }
+                } else {
+                    // Fallback: use original text
+                    foreach ($chunk as $text) {
+                        $allPrompts[] = $text;
+                    }
+                }
+
+            } catch (\Exception $e) {
+                Log::error('Image prompt generation failed: ' . $e->getMessage());
+                // Fallback: use original text
+                foreach ($chunk as $text) {
+                    $allPrompts[] = $text;
+                }
+            }
+        }
+
+        return $allPrompts;
     }
 }

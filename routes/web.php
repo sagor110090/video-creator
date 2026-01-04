@@ -21,9 +21,7 @@ Route::get('/statistics', function () {
     return Inertia::render('Statistics');
 })->name('statistics');
 
-Route::get('/schedules', function () {
-    return Inertia::render('Schedules');
-})->name('schedules');
+
 
 Route::get('/videos/{path}', function ($path) {
     $fullPath = storage_path('app/public/videos/' . $path);

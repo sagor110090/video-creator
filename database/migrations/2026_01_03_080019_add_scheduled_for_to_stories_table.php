@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('stories', function (Blueprint $table) {
-            $table->boolean('is_from_scheduler')->default(false);
+            $table->timestamp('scheduled_for')->nullable()->after('status');
         });
     }
 
@@ -22,7 +22,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('stories', function (Blueprint $table) {
-            $table->dropColumn('is_from_scheduler');
+            $table->dropColumn('scheduled_for');
         });
     }
 };

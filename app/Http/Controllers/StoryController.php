@@ -11,9 +11,15 @@ use Illuminate\Support\Facades\Log;
 
 class StoryController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return Story::with(['youtubeChannel'])->withCount('scenes')->latest()->paginate(9);
+        $query = Story::with(['youtubeChannel'])->withCount('scenes')->latest();
+
+        if ($request->has('channel_id') && $request->channel_id) {
+            $query->where('youtube_token_id', $request->channel_id);
+        }
+
+        return $query->paginate(9);
     }
 
     public function generate(Request $request, AiStoryService $aiService)
@@ -93,9 +99,50 @@ class StoryController extends Controller
             return response()->json(['error' => 'YouTube title is required for upload.'], 400);
         }
 
+        // If scheduled_for is set, we don't dispatch immediately
+        if ($story->scheduled_for && $story->scheduled_for->isFuture()) {
+             // Reset error if any
+            $story->update(['youtube_error' => null]);
+            return response()->json(['message' => 'Video scheduled for upload.']);
+        }
+
         UploadToYouTubeJob::dispatch($story);
 
         return response()->json(['message' => 'Upload queued successfully.']);
+    }
+
+    public function schedule(Request $request, Story $story)
+    {
+        \Log::info('Scheduling Request:', [
+            'story_id' => $story->id,
+            'input' => $request->all(),
+            'server_time' => now()->toDateTimeString(),
+            'timezone' => config('app.timezone'),
+        ]);
+
+        $request->validate([
+            'scheduled_for' => 'nullable|date',
+            'youtube_title' => 'nullable|string|max:100',
+            'youtube_description' => 'nullable|string',
+            'youtube_tags' => 'nullable|string',
+            'youtube_token_id' => 'nullable|exists:youtube_tokens,id',
+        ]);
+
+        $story->update([
+            'scheduled_for' => $request->scheduled_for,
+            'youtube_title' => $request->youtube_title ?? $story->youtube_title,
+            'youtube_description' => $request->youtube_description ?? $story->youtube_description,
+            'youtube_tags' => $request->youtube_tags ?? $story->youtube_tags,
+            'youtube_token_id' => $request->youtube_token_id ?? $story->youtube_token_id,
+            'youtube_upload_status' => 'uploading',
+        ]);
+
+        if ($story->scheduled_for) {
+            \Log::info("Dispatching immediate upload for scheduled story ID: {$story->id}");
+            UploadToYouTubeJob::dispatch($story);
+        }
+
+        return response()->json($story->load('youtubeChannel'));
     }
 
     public function generateMetadata(Story $story, AiStoryService $aiService)

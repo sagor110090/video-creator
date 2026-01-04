@@ -8,7 +8,7 @@ const props = defineProps({
     }
 });
 
-const emit = defineEmits(['regenerate', 'delete', 'upload']);
+const emit = defineEmits(['regenerate', 'delete', 'upload', 'schedule']);
 const videoLoaded = ref(false);
 const isVisible = ref(false);
 const cardRef = ref(null);
@@ -53,6 +53,7 @@ const statusClass = (status) => {
         case 'processing': return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400';
         case 'pending': return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400';
         case 'failed': return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400';
+        case 'scheduled': return 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400';
         default: return 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-400';
     }
 };
@@ -61,13 +62,30 @@ const formatDate = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
     const now = new Date();
-    const diffTime = Math.abs(now - date);
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    const diffTime = date - now; // Positive if future
+
+    // Handle scheduled time (future)
+    if (diffTime > 0) {
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays <= 1) {
+            const diffHours = Math.ceil(diffTime / (1000 * 60 * 60));
+            if (diffHours <= 1) {
+                 const diffMins = Math.ceil(diffTime / (1000 * 60));
+                 return `in ${diffMins}m`;
+            }
+             return `in ${diffHours}h`;
+        }
+         return `in ${diffDays}d`;
+    }
+
+    // Handle past time
+    const pastDiff = Math.abs(diffTime);
+    const diffDays = Math.floor(pastDiff / (1000 * 60 * 60 * 24));
 
     if (diffDays === 0) {
-        const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
+        const diffHours = Math.floor(pastDiff / (1000 * 60 * 60));
         if (diffHours === 0) {
-            const diffMins = Math.floor(diffTime / (1000 * 60));
+            const diffMins = Math.floor(pastDiff / (1000 * 60));
             return diffMins === 0 ? 'Just now' : `${diffMins}m ago`;
         }
         return `${diffHours}h ago`;
@@ -107,6 +125,40 @@ const formatProcessingTime = (story) => {
         return `${minutes}m ${seconds}s`;
     }
     return `${seconds}s`;
+};
+
+const formatScheduledDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const now = new Date();
+
+    // Check if it's today
+    const isToday = date.toDateString() === now.toDateString();
+
+    // Check if it's tomorrow
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const isTomorrow = date.toDateString() === tomorrow.toDateString();
+
+    // Format time
+    const timeStr = date.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+    });
+
+    if (isToday) {
+        return `Today at ${timeStr}`;
+    } else if (isTomorrow) {
+        return `Tomorrow at ${timeStr}`;
+    } else {
+        const dateStr = date.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            weekday: 'short'
+        });
+        return `${dateStr} at ${timeStr}`;
+    }
 };
 </script>
 
@@ -181,6 +233,12 @@ const formatProcessingTime = (story) => {
 
         <!-- Content Area -->
         <div class="p-6 flex-1 flex flex-col">
+            <!-- Channel Info -->
+            <div v-if="story.youtube_channel" class="flex items-center space-x-2 mb-3 pb-3 border-b border-slate-100 dark:border-slate-800/50">
+                <img :src="story.youtube_channel.channel_thumbnail" class="w-6 h-6 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm">
+                <span class="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{{ story.youtube_channel.channel_title }}</span>
+            </div>
+
             <div class="flex justify-between items-start mb-3">
                 <h3 class="font-bold text-slate-900 dark:text-white line-clamp-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{{ story.title || 'Untitled Story' }}</h3>
                 <span :class="statusClass(story.status)" class="text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wider">
@@ -209,6 +267,10 @@ const formatProcessingTime = (story) => {
                                 <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                                 <span class="text-emerald-600 dark:text-emerald-400 font-semibold">{{ formatProcessingTime(story) }}</span>
                             </div>
+                            <div v-if="story.scheduled_for && !story.is_uploaded_to_youtube" class="flex items-center space-x-1.5 bg-amber-50 dark:bg-amber-900/30 px-2.5 py-1.5 rounded-lg border border-amber-100 dark:border-amber-900/50">
+                                <svg class="w-3.5 h-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                <span class="text-amber-600 dark:text-amber-400 font-semibold" title="Scheduled Upload">{{ formatScheduledDate(story.scheduled_for) }}</span>
+                            </div>
                         </div>
                         <div class="flex items-center space-x-1.5 bg-slate-100 dark:bg-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700">
                             <svg class="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
@@ -229,14 +291,24 @@ const formatProcessingTime = (story) => {
                                 @click="emit('upload', story)"
                                 class="col-span-1 flex items-center justify-center space-x-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-xl transition-all text-sm">
                             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-                            <span>Retry YT</span>
+                            <span>Retry Publish</span>
                         </button>
 
-                        <button v-else-if="!story.youtube_upload_status"
-                                @click="emit('upload', story)"
-                                class="flex items-center justify-center space-x-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-xl transition-all text-sm">
-                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-                            <span>YouTube</span>
+                        <button v-else-if="!story.youtube_upload_status && !story.is_uploaded_to_youtube"
+                                class="flex space-x-2">
+                            <!-- Schedule Button -->
+                            <button @click="emit('schedule', story)"
+                                    class="bg-amber-500 hover:bg-amber-600 text-white p-2 rounded-xl transition-all"
+                                    title="Schedule Upload">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            </button>
+
+                            <!-- Immediate Upload -->
+                            <button @click="emit('upload', story)"
+                                    class="flex items-center justify-center space-x-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-xl transition-all text-sm">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                                <span>Publish</span>
+                            </button>
                         </button>
 
                         <!-- YouTube Error -->
@@ -254,6 +326,13 @@ const formatProcessingTime = (story) => {
                                     <span class="text-[10px] font-bold">LIVE ON YOUTUBE</span>
                                 </div>
                                 <a :href="'https://youtube.com/watch?v=' + story.youtube_video_id" target="_blank" class="text-[10px] underline font-bold">WATCH</a>
+                            </div>
+                            <div v-else-if="story.youtube_upload_status === 'scheduled'" class="w-full flex items-center justify-between p-2 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 rounded-xl border border-purple-100 dark:border-purple-900/30">
+                                <div class="flex items-center">
+                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                    <span class="text-[10px] font-bold">SCHEDULED ON YOUTUBE</span>
+                                </div>
+                                <span class="text-[10px] font-bold">{{ formatScheduledDate(story.scheduled_for) }}</span>
                             </div>
                             <div v-else-if="story.youtube_upload_status === 'uploading'" class="w-full flex items-center justify-center p-2 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 rounded-xl border border-yellow-100 dark:border-yellow-900/30">
                                 <svg class="animate-spin h-3 w-3 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>

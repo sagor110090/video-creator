@@ -54,6 +54,42 @@ tts_model = ChatterboxTTS.from_pretrained(DEVICE)
 vc_model = ChatterboxVC.from_pretrained(DEVICE)
 print("Chatterbox models initialized successfully!", file=sys.stderr)
 
+STOPWORDS = {
+    'a', 'an', 'the', 'and', 'or', 'but', 'if', 'because', 'as', 'what',
+    'when', 'where', 'how', 'who', 'why', 'which', 'this', 'that', 'these',
+    'those', 'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+    'have', 'has', 'had', 'having', 'do', 'does', 'did', 'doing',
+    'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves',
+    'you', 'your', 'yours', 'yourself', 'yourselves', 'he', 'him', 'his',
+    'himself', 'she', 'her', 'hers', 'herself', 'it', 'its', 'itself',
+    'they', 'them', 'their', 'theirs', 'themselves',
+    'imagine', 'picture', 'think', 'consider', 'suppose', 'visualize',
+    'look', 'see', 'watch', 'notice', 'observe', 'video', 'scene', 'clip',
+    'image', 'photo', 'picture', 'shot', 'frame', 'screen', 'camera',
+    'did', 'know', 'can', 'could', 'would', 'should', 'will', 'shall',
+    'just', 'only', 'very', 'really', 'too', 'quite', 'rather', 'much',
+    'so', 'here', 'heres', 'question', 'answer', 'ask', 'asking'
+}
+
+def extract_keywords(text, limit=6):
+    """Extracts the most relevant keywords from a sentence."""
+    # Remove punctuation
+    text = re.sub(r'[^\w\s]', ' ', text)
+    words = text.lower().split()
+
+    # Filter out stopwords and short words
+    keywords = [w for w in words if w not in STOPWORDS and len(w) > 2]
+
+    # Deduplicate while preserving order
+    seen = set()
+    unique_keywords = []
+    for w in keywords:
+        if w not in seen:
+            seen.add(w)
+            unique_keywords.append(w)
+
+    return " ".join(unique_keywords[:limit])
+
 def download_web_image(query, output_path):
     """Downloads a high-quality, watermark-free image from the web with multiple fallbacks."""
 
@@ -201,7 +237,7 @@ async def generate_tts_audio(output_path, text, style='story', scene_index=0):
         'science_short': {'rate': '-15%', 'pitch': '-1Hz'},
         'hollywood_hype': {'rate': '-5%', 'pitch': '+2Hz'},
         'trade_wave': {'rate': '-15%', 'pitch': '-2Hz'},
-        'story': {'rate': '-25%', 'pitch': '+1Hz'}
+        'story': {'rate': '-35%', 'pitch': '+1Hz'}
     }
     config = personalities.get(style, personalities['story'])
 
@@ -240,7 +276,8 @@ async def generate_tts_audio(output_path, text, style='story', scene_index=0):
         convert_cmd = [
             FFMPEG_PATH, '-y', '-i', temp_audio,
             '-af', (
-                'dynaudnorm=p=0.9:s=5,'   # Professional dynamic normalization
+                'volume=2.5,'             # Boost volume significantly
+                'dynaudnorm=p=0.95:s=5,'  # Professional dynamic normalization (increased peak)
                 'aecho=0.8:0.88:6:0.4,'   # Subtle room presence
                 'highpass=f=80,'          # Remove low-end rumble
                 'lowpass=f=15000'         # Remove harsh high-end hiss
@@ -313,11 +350,12 @@ async def generate_cloned_voice(output_path, text, target_voice_path=None, scene
         convert_cmd = [
             FFMPEG_PATH, '-y', '-i', temp_output_wav,
             '-af', (
-                'dynaudnorm=p=0.9:s=5,'   # Professional dynamic normalization
+                'volume=2.5,'             # Boost volume significantly
+                'dynaudnorm=p=0.95:s=5,'  # Professional dynamic normalization (increased peak)
                 'aecho=0.8:0.88:6:0.4,'   # Subtle room presence
                 'highpass=f=80,'          # Remove low-end rumble
                 'lowpass=f=15000,'        # Remove harsh high-end hiss
-                'atempo=0.85'             # Slower speed (85%) for ChatterboxTTS naturalness
+                'atempo=0.80'             # Slower speed (80%) for ChatterboxTTS naturalness
             ),
             '-ar', '48000',
             '-ac', '2',
@@ -587,22 +625,58 @@ async def main():
     if not os.path.exists(output_dir): os.makedirs(output_dir)
 
     scene_videos = []
+    last_successful_image = None # For fallback continuity
+
     for i, scene in enumerate(scenes):
         img_path = os.path.join(output_dir, f"scene_{i}_img.jpg")
         aud_path = os.path.join(output_dir, f"scene_{i}_aud.mp3")
         vid_path = os.path.join(output_dir, f"scene_{i}_vid.mp4")
 
         # Try to download image from web
+        # Retry Logic:
+        # 1. Full Query
+        # 2. Simplified Query (Keywords)
+        # 3. Super Broad Query ("abstract background")
+
         success = download_web_image(scene['image_prompt'], img_path)
 
         if not success:
-            # Fallback: Generate a black image if download fails
-            print(f"DEBUG: Falling back to black image for scene {i}", file=sys.stderr)
-            dimensions = "1920x1080" if aspect_ratio == "16:9" else "1080x1920"
-            run_command([FFMPEG_PATH, '-y', '-f', 'lavfi', '-i', f'color=c=black:s={dimensions}', '-frames:v', '1', img_path])
+            print(f"DEBUG: Primary search failed for scene {i}. Retrying with simplified keywords...", file=sys.stderr)
+            simple_query = extract_keywords(scene['image_prompt'], limit=3)
+            success = download_web_image(simple_query, img_path)
+
+        if not success:
+            print(f"DEBUG: Secondary search failed. Retrying with broad fallback...", file=sys.stderr)
+            success = download_web_image("cinematic background", img_path)
+
+        if not success:
+            if last_successful_image and os.path.exists(last_successful_image):
+                 # Fallback: Use previous scene's image ("like scene 1")
+                 print(f"DEBUG: All searches failed. reusing previous image for scene {i}", file=sys.stderr)
+                 shutil.copy(last_successful_image, img_path)
+                 success = True
+            else:
+                # Final Fallback: Generate a random placeholder image from Picsum
+                print(f"DEBUG: Falling back to Picsum image for scene {i}", file=sys.stderr)
+                width = 1920 if aspect_ratio == "16:9" else 1080
+                height = 1080 if aspect_ratio == "16:9" else 1920
+
+                try:
+                    url = f"https://picsum.photos/{width}/{height}?sig={int(time.time())}"
+                    headers = {'User-Agent': 'Mozilla/5.0'}
+                    req = urllib.request.Request(url, headers=headers)
+                    with urllib.request.urlopen(req, timeout=10) as response:
+                        with open(img_path, 'wb') as f:
+                            f.write(response.read())
+                    success = True
+                except Exception as e:
+                    print(f"DEBUG: Picsum fallback failed: {e}. Using black image.", file=sys.stderr)
+                    dimensions = f"{width}x{height}"
+                    run_command([FFMPEG_PATH, '-y', '-f', 'lavfi', '-i', f'color=c=black:s={dimensions}', '-frames:v', '1', img_path])
         else:
             # Clean the downloaded image from watermarks before using it
             clean_watermark(img_path)
+            last_successful_image = img_path # Update success tracker
 
         await generate_cloned_voice(aud_path, scene['narration'], TARGET_VOICE_PATH, i)
         create_scene_video(img_path, aud_path, vid_path, scene['narration'], i, aspect_ratio)

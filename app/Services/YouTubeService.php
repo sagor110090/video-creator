@@ -211,7 +211,16 @@ class YouTubeService
             $video->setSnippet($snippet);
 
             $status = new VideoStatus();
-            $status->setPrivacyStatus('public'); // or 'unlisted' or 'private'
+
+            if ($story->scheduled_for) {
+                $scheduledTime = new \DateTime($story->scheduled_for);
+                $status->setPublishAt($scheduledTime->format(\DateTime::ATOM));
+                $status->setPrivacyStatus('private'); // Scheduled videos must be private initially
+                Log::info("Scheduling video for: " . $scheduledTime->format(\DateTime::ATOM));
+            } else {
+                $status->setPrivacyStatus('public');
+            }
+
             $video->setStatus($status);
 
             $videoPath = public_path('storage/' . $story->video_path);
@@ -250,11 +259,19 @@ class YouTubeService
 
             $this->client->setDefer(false);
 
+            $uploadStatus = $story->scheduled_for ? 'scheduled' : 'completed';
+
             $story->update([
                 'youtube_video_id' => $status['id'],
                 'is_uploaded_to_youtube' => true,
-                'youtube_upload_status' => 'completed',
+                'youtube_upload_status' => $uploadStatus,
             ]);
+
+            $message = $story->scheduled_for
+                ? "Video scheduled for {$story->scheduled_for} and will be published by YouTube automatically"
+                : "Video published successfully";
+
+            Log::info("YouTube upload successful for Story ID: {$story->id}. {$message}");
 
             return $status['id'];
 

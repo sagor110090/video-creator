@@ -24,6 +24,5 @@ class DatabaseSeeder extends Seeder
         ]);
         $this->call(YoutubeTokensTableSeeder::class);
         $this->call(FacebookPagesTableSeeder::class);
-        $this->call(SchedulesTableSeeder::class);
     }
 }

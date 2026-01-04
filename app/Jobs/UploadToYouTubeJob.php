@@ -28,8 +28,6 @@ class UploadToYouTubeJob implements ShouldQueue
         try {
             Log::info("Starting YouTube upload for Story ID: {$this->story->id}");
             
-            $this->story->update(['youtube_upload_status' => 'uploading']);
-            
             $videoId = $youtubeService->uploadVideo($this->story);
             
             Log::info("YouTube upload successful for Story ID: {$this->story->id}. Video ID: {$videoId}");

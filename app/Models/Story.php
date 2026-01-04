@@ -23,7 +23,11 @@ class Story extends Model
         'youtube_upload_status',
         'youtube_token_id',
         'youtube_error',
-        'is_from_scheduler',
+        'scheduled_for',
+    ];
+
+    protected $casts = [
+        'scheduled_for' => 'datetime',
     ];
 
     protected $with = ['youtubeChannel'];

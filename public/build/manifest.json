@@ -1,16 +1,16 @@
 {
-  "_AppLayout-D6UYiL9N.css": {
-    "file": "assets/AppLayout-D6UYiL9N.css",
-    "src": "_AppLayout-D6UYiL9N.css"
+  "_AppLayout-BaLEZhDy.css": {
+    "file": "assets/AppLayout-BaLEZhDy.css",
+    "src": "_AppLayout-BaLEZhDy.css"
   },
-  "_AppLayout-Dtby9Tk5.js": {
-    "file": "assets/AppLayout-Dtby9Tk5.js",
+  "_AppLayout-CvPIaxgJ.js": {
+    "file": "assets/AppLayout-CvPIaxgJ.js",
     "name": "AppLayout",
     "imports": [
       "resources/js/app.js"
     ],
     "css": [
-      "assets/AppLayout-D6UYiL9N.css"
+      "assets/AppLayout-BaLEZhDy.css"
     ]
   },
   "_sweetalert2.esm.all-BQxta0Da.js": {
@@ -18,7 +18,7 @@
     "name": "sweetalert2.esm.all"
   },
   "resources/css/app.css": {
-    "file": "assets/app-C_Cvs6EZ.css",
+    "file": "assets/app-tFR_WBf_.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -26,62 +26,47 @@
       "app.css"
     ]
   },
-  "resources/js/Pages/Schedules.vue": {
-    "file": "assets/Schedules-Br5RJTtP.js",
-    "name": "Schedules",
-    "src": "resources/js/Pages/Schedules.vue",
-    "isDynamicEntry": true,
-    "imports": [
-      "resources/js/app.js",
-      "_AppLayout-Dtby9Tk5.js",
-      "_sweetalert2.esm.all-BQxta0Da.js"
-    ],
-    "css": [
-      "assets/Schedules-DnlwLfH0.css"
-    ]
-  },
   "resources/js/Pages/Statistics.vue": {
-    "file": "assets/Statistics-D2_xZ6Ls.js",
+    "file": "assets/Statistics-BuCy2gLI.js",
     "name": "Statistics",
     "src": "resources/js/Pages/Statistics.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-Dtby9Tk5.js"
+      "_AppLayout-CvPIaxgJ.js"
     ]
   },
   "resources/js/Pages/Welcome.vue": {
-    "file": "assets/Welcome-DqggdCtK.js",
+    "file": "assets/Welcome-IUyRkov1.js",
     "name": "Welcome",
     "src": "resources/js/Pages/Welcome.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-Dtby9Tk5.js",
+      "_AppLayout-CvPIaxgJ.js",
       "_sweetalert2.esm.all-BQxta0Da.js"
     ],
     "css": [
-      "assets/Welcome--c1kRj_M.css"
+      "assets/Welcome-CPRiSr8x.css"
     ]
   },
   "resources/js/Pages/YouTubeChannels.vue": {
-    "file": "assets/YouTubeChannels-CUSkPLUt.js",
+    "file": "assets/YouTubeChannels-D-TCtsI-.js",
     "name": "YouTubeChannels",
     "src": "resources/js/Pages/YouTubeChannels.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-Dtby9Tk5.js",
+      "_AppLayout-CvPIaxgJ.js",
       "_sweetalert2.esm.all-BQxta0Da.js"
     ]
   },
   "resources/js/app.js": {
-    "file": "assets/app-t_rrVvmK.js",
+    "file": "assets/app-aYxzcxFR.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
     "dynamicImports": [
-      "resources/js/Pages/Schedules.vue",
       "resources/js/Pages/Statistics.vue",
       "resources/js/Pages/Welcome.vue",
       "resources/js/Pages/YouTubeChannels.vue"
