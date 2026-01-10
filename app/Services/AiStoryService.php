@@ -33,20 +33,23 @@ class AiStoryService
 
     public function generateTopic(string $channelContext, string $style = 'story'): string
     {
+        $currentDate = date('Y-m-d');
         $stylePrompts = [
-            'science_short' => "Generate ONE specific, high-interest science or technology topic.
+            'science_short' => "Generate ONE specific, high-interest science or technology topic. Today's date is {$currentDate}.
             - Focus on: Astrophysics, Quantum Physics, Deep Sea, AI, or Future Tech.
             - Examples: 'The James Webb Space Telescope', 'Quantum Entanglement', 'Mariana Trench Secrets'.
             - Return ONLY the topic name (2-5 words). No punctuation.",
 
-            'hollywood_hype' => "Generate ONE trending Hollywood or Celebrity topic.
-            - Focus on: A-list stars, major movie releases, or viral pop culture moments.
+            'hollywood_hype' => "Generate ONE trending Hollywood or Celebrity topic. Today's date is {$currentDate}.
+            - Focus on: A-list stars, major movie releases, or viral pop culture moments happening RIGHT NOW.
             - Examples: 'Dakota Johnson Movie Rumors', 'Oscars Best Picture Controversy', 'Celebrity Fashion Trends'.
+            - Ensure the topic is fresh and highly relevant to the current week.
             - Return ONLY the topic name (2-5 words). No punctuation.",
 
-            'trade_wave' => "Generate ONE high-impact Trading or Finance topic.
+            'trade_wave' => "Generate ONE high-impact Trading or Finance topic. Today's date is {$currentDate}.
             - Focus on: Bitcoin/Crypto, S&P 500, Tech Stocks, or Global Economy.
             - Examples: 'Bitcoin Spot ETF Impact', 'AI Stock Market Rally', 'Interest Rate Decisions'.
+            - Focus on current market sentiment and breaking financial news.
             - Return ONLY the topic name (2-5 words). No punctuation.",
 
             'story' => "Generate ONE intriguing story concept.
@@ -59,7 +62,7 @@ class AiStoryService
         $prompt .= "\n\nChannel Context: {$channelContext}";
 
         try {
-            $response = Http::withHeaders([
+            $response = Http::timeout(60)->withHeaders([
                 'Authorization' => 'Bearer ' . $this->apiKey,
                 'Content-Type' => 'application/json',
             ])->post($this->baseUrl, [
@@ -89,6 +92,7 @@ class AiStoryService
 
     public function generateStory(string $topic = null, string $style = 'story', string $aspectRatio = '16:9'): array
     {
+        set_time_limit(180); // Increase PHP execution time for long story generation
         $isShorts = $aspectRatio === '9:16';
 
         // Define word counts and durations based on format
@@ -208,7 +212,7 @@ class AiStoryService
                 $payload['response_format'] = ['type' => 'json_object'];
             }
 
-            $response = Http::withHeaders([
+            $response = Http::timeout(120)->withHeaders([
                 'Authorization' => 'Bearer ' . $this->apiKey,
                 'Content-Type' => 'application/json',
             ])->post($this->baseUrl, $payload);
@@ -266,7 +270,7 @@ class AiStoryService
                 $payload['response_format'] = ['type' => 'json_object'];
             }
 
-            $response = Http::withHeaders([
+            $response = Http::timeout(60)->withHeaders([
                 'Authorization' => 'Bearer ' . $this->apiKey,
                 'Content-Type' => 'application/json',
             ])->post($this->baseUrl, $payload);
@@ -287,34 +291,42 @@ class AiStoryService
 
     public function searchNews(string $query): array
     {
-        $prompt = "Act as a news search engine. For the query: '{$query}', provide 3 realistic and recent-sounding news snippets.
-        If the query is about Hollywood/Entertainment, focus on relevant celebrities, movies, shows, and entertainment industry news.
-        If the query is about Trading/Finance/Market, focus on stocks, crypto, or economic updates.
-        Each snippet should have a catchy 'title' and a 'snippet' (summary).
-        Ensure the news sounds current and exciting.
+        set_time_limit(120); // Increase PHP execution time for detailed news search
+        $currentDate = date('Y-m-d');
+        $prompt = "Act as a real-time news search engine. Today's date is {$currentDate}.
+        For the query: '{$query}', provide 15 realistic, diverse, and very recent news snippets.
+        If the query is about Hollywood/Entertainment, focus on the absolute latest celebrity gossip, movie announcements, box office results, and viral social media moments from the last 24-48 hours.
+        If the query is about Trading/Finance/Market, focus on the latest stock movements, crypto price action, or economic breaking news.
+
+        CRITICAL:
+        - Ensure the news is different every time this is called by focusing on different sub-topics or recent events.
+        - Use a variety of sources (simulated) and perspectives.
+        - DO NOT repeat common old news. Look for the 'bleeding edge' of what might be happening NOW.
+        - DESCRIPTION LENGTH: Each 'snippet' must be a detailed paragraph (3-5 sentences, approx 60-100 words). It should include specific details, names, numbers, and the context of why this is trending.
+
+        Each snippet should have a catchy 'title' and a 'snippet' (detailed summary).
 
         Format your response as a JSON array of objects, like this:
         [
           {\"title\": \"...\", \"snippet\": \"...\"},
-          {\"title\": \"...\", \"snippet\": \"...\"},
-          {\"title\": \"...\", \"snippet\": \"...\"}
+          ... (up to 15 items)
         ]";
 
         try {
             $payload = [
                 'model' => $this->model,
                 'messages' => [
-                    ['role' => 'system', 'content' => 'You are a real-time news aggregator for entertainment and finance. Output ONLY valid JSON.'],
+                    ['role' => 'system', 'content' => "You are a real-time news aggregator for entertainment and finance. Today's date is {$currentDate}. Output ONLY valid JSON."],
                     ['role' => 'user', 'content' => $prompt]
                 ],
-                'temperature' => 0.8,
+                'temperature' => 0.95, // Even higher temperature for more variety
             ];
 
             if ($this->provider === 'groq' || $this->provider === 'deepseek') {
                 $payload['response_format'] = ['type' => 'json_object'];
             }
 
-            $response = Http::withHeaders([
+            $response = Http::timeout(90)->withHeaders([
                 'Authorization' => 'Bearer ' . $this->apiKey,
                 'Content-Type' => 'application/json',
             ])->post($this->baseUrl, $payload);
@@ -329,8 +341,9 @@ class AiStoryService
 
             // If it's a single object instead of an array, wrap it
             $decoded = json_decode($cleanContent, true);
-            if (isset($decoded['news'])) return $decoded['news'];
-            return is_array($decoded) ? $decoded : [$decoded];
+            if (isset($decoded['news'])) return array_slice($decoded['news'], 0, 15);
+            $results = is_array($decoded) ? $decoded : [$decoded];
+            return array_slice($results, 0, 15);
 
         } catch (\Exception $e) {
             Log::error('News simulation failed: ' . $e->getMessage());
@@ -338,16 +351,50 @@ class AiStoryService
             // Fallback based on query keywords
             if (stripos($query, 'crypto') !== false || stripos($query, 'stock') !== false || stripos($query, 'market') !== false || stripos($query, 'bitcoin') !== false) {
                 return [
-                    ['title' => "Bitcoin Breaks New Resistance", 'snippet' => "Bitcoin has surged past key resistance levels as institutional interest continues to grow."],
-                    ['title' => "AI Stocks Rally on Tech Earnings", 'snippet' => "Major tech companies report better-than-expected earnings, sending AI-focused stocks to new highs."],
-                    ['title' => "Federal Reserve Holds Rates", 'snippet' => "The Fed decided to keep interest rates steady, sparking a relief rally across global markets."]
+                    [
+                        'title' => "Bitcoin Surges Past Key Resistance",
+                        'snippet' => "Bitcoin has seen a massive spike in volume today, breaking through major resistance levels at $95,000 as institutional demand peaks. Analysts suggest that the influx of spot ETF inflows is driving the current rally, with several major hedge funds increasing their positions. This move has sparked a broader market recovery, lifting Ethereum and other major altcoins by nearly 10% in just 24 hours."
+                    ],
+                    [
+                        'title' => "AI Tech Stocks Lead Market Rally",
+                        'snippet' => "NVIDIA and other AI-focused tech giants are driving the S&P 500 to new record highs today following better-than-expected quarterly earnings. The surge in demand for high-performance computing chips continues to outpace supply, leading to a 5% jump in stock prices across the semiconductor sector. Investors are now closely watching upcoming reports from other big tech firms to see if the AI-driven growth trend is sustainable."
+                    ],
+                    [
+                        'title' => "SEC Issues New Guidance on Digital Assets",
+                        'snippet' => "The SEC has released an updated framework for digital asset classification, specifically targeting how decentralized autonomous organizations (DAOs) are regulated. This move has created a ripple effect through the industry, with many developers calling for clearer definitions to avoid potential legal challenges. Major exchanges are already reviewing their listings to ensure compliance with the newly issued guidelines."
+                    ],
+                    [
+                        'title' => "Global Markets React to Inflation Data",
+                        'snippet' => "Latest CPI data has come in lower than expected at 3.1%, fueling hopes for a potential interest rate cut by the Federal Reserve in the next quarter. European and Asian markets responded positively to the news, with major indices closing in the green as recession fears begin to subside. Economists warn, however, that wage growth remains a persistent factor that could keep inflation levels volatile in the coming months."
+                    ],
+                    [
+                        'title' => "Ethereum Whale Activity Spikes",
+                        'snippet' => "Large Ethereum transactions involving wallets with over 10,000 ETH have increased by 40% in the last 24 hours, suggesting a major institutional move is imminent. Data from on-chain analytics platforms indicates that a significant amount of supply is being moved off exchanges and into cold storage, which typically precedes a price breakout. Retail interest is also beginning to climb as social media mentions of 'ETH 2.0' hit a three-month high."
+                    ]
                 ];
             }
 
             return [
-                ['title' => "Breaking: Major Film Announced", 'snippet' => "A highly anticipated project has been officially confirmed, featuring top talent from across the industry."],
-                ['title' => "Celebrity News Update", 'snippet' => "The entertainment world is buzzing with the latest developments in film and television."],
-                ['title' => "Box Office Records Shattered", 'snippet' => "The latest blockbuster has exceeded all expectations, setting new records for weekend earnings."]
+                [
+                    'title' => "Hollywood Blockbuster Breaks Records",
+                    'snippet' => "The latest summer blockbuster has officially crossed the $1 billion mark globally, setting a new industry record for the fastest film to reach this milestone. Driven by an aggressive social media marketing campaign and rave reviews from both critics and audiences, the movie has dominated the box office for three consecutive weeks. Studio executives are already fast-tracking a sequel and exploring potential spin-off series for their streaming platform."
+                ],
+                [
+                    'title' => "A-List Actor Joins Marvel Cinematic Universe",
+                    'snippet' => "In a shock announcement during a major fan convention, a legendary Oscar-winning actor has been officially cast in a pivotal role for the upcoming Avengers: Secret Wars. Fans have been speculating about this casting for months, and the reveal has already generated millions of views on social media. The actor is expected to bring a new level of gravitas to the franchise as it prepares for its most ambitious phase yet."
+                ],
+                [
+                    'title' => "Streaming Giant Announces Massive Price Hike",
+                    'snippet' => "One of the world's largest streaming platforms has announced a significant increase in subscription costs for its premium tier, effective immediately for new members. The company cites the rising costs of producing original content and a strategic shift towards ad-supported tiers as the primary reasons for the change. Industry analysts expect other major competitors to follow suit as they all prioritize profitability over subscriber growth in the coming year."
+                ],
+                [
+                    'title' => "Celebrity Wedding of the Year",
+                    'snippet' => "Two of Hollywood's biggest stars have reportedly tied the knot in an ultra-private, star-studded ceremony at a historic villa in Lake Como, Italy. While no official photos have been released, sources close to the couple describe the event as an elegant affair attended by A-list directors and fellow actors. The news has sent fans into a frenzy, with paparazzi drones reportedly being intercepted near the wedding venue throughout the weekend."
+                ],
+                [
+                    'title' => "Awards Season Predictions Heating Up",
+                    'snippet' => "With the first major international film festivals concluding, critics and industry insiders are already narrowing down their frontrunners for the next Academy Awards. A low-budget indie drama from a first-time director has emerged as a surprise contender, earning standing ovations and early buzz for Best Picture. Meanwhile, several big-budget biopics are facing criticism for historical inaccuracies, potentially complicating their path to the Oscars."
+                ]
             ];
         }
     }
@@ -393,7 +440,7 @@ class AiStoryService
                     $payload['response_format'] = ['type' => 'json_object'];
                 }
 
-                $response = Http::withHeaders([
+                $response = Http::timeout(120)->withHeaders([
                     'Authorization' => 'Bearer ' . $this->apiKey,
                     'Content-Type' => 'application/json',
                 ])->post($this->baseUrl, $payload);

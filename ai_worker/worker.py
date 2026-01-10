@@ -276,7 +276,7 @@ async def generate_tts_audio(output_path, text, style='story', scene_index=0):
         convert_cmd = [
             FFMPEG_PATH, '-y', '-i', temp_audio,
             '-af', (
-                'volume=2.5,'             # Boost volume significantly
+                'volume=4.5,'             # Boost volume significantly
                 'dynaudnorm=p=0.95:s=5,'  # Professional dynamic normalization (increased peak)
                 'aecho=0.8:0.88:6:0.4,'   # Subtle room presence
                 'highpass=f=80,'          # Remove low-end rumble
@@ -350,7 +350,7 @@ async def generate_cloned_voice(output_path, text, target_voice_path=None, scene
         convert_cmd = [
             FFMPEG_PATH, '-y', '-i', temp_output_wav,
             '-af', (
-                'volume=2.5,'             # Boost volume significantly
+                'volume=4.5,'             # Boost volume significantly
                 'dynaudnorm=p=0.95:s=5,'  # Professional dynamic normalization (increased peak)
                 'aecho=0.8:0.88:6:0.4,'   # Subtle room presence
                 'highpass=f=80,'          # Remove low-end rumble

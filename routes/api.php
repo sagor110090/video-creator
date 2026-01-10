@@ -16,6 +16,11 @@ Route::get('/stories', [StoryController::class, 'index']);
 Route::delete('/stories/{story}', [StoryController::class, 'destroy']);
 Route::post('/stories/{story}/regenerate', [StoryController::class, 'regenerate']);
 
+Route::get('/schedules', [\App\Http\Controllers\VideoScheduleController::class, 'index']);
+Route::post('/schedules', [\App\Http\Controllers\VideoScheduleController::class, 'store']);
+Route::patch('/schedules/{videoSchedule}', [\App\Http\Controllers\VideoScheduleController::class, 'update']);
+Route::delete('/schedules/{videoSchedule}', [\App\Http\Controllers\VideoScheduleController::class, 'destroy']);
+
 Route::get('/youtube/channels', [\App\Http\Controllers\YouTubeController::class, 'channels']);
 Route::delete('/youtube/channels/{id}', [\App\Http\Controllers\YouTubeController::class, 'disconnect']);
 Route::post('/youtube/refresh/{id}', [\App\Http\Controllers\YouTubeController::class, 'refresh']);

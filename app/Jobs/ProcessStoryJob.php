@@ -49,6 +49,15 @@ class ProcessStoryJob implements ShouldQueue
 
             $this->story->update(['status' => 'completed']);
 
+            // Reload the story to get any changes made during runAiWorker (like video_path)
+            $freshStory = $this->story->fresh();
+
+            // Auto-upload if it's from a schedule or has a channel selected
+            if ($freshStory->youtube_token_id) {
+                Log::info("Auto-dispatching YouTube upload for Story ID: {$freshStory->id}");
+                UploadToYouTubeJob::dispatch($freshStory);
+            }
+
 
         } catch (\Exception $e) {
             Log::error('Video processing failed: ' . $e->getMessage());

@@ -22,3 +22,5 @@ Artisan::command('inspire', function () {
 //         $story->delete();
 //     }
 // })->daily();
+
+Schedule::command('video-schedules:process')->everyMinute();

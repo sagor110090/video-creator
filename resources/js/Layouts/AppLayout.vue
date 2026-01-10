@@ -8,6 +8,7 @@ const isSidebarOpen = ref(false);
 
 const navigation = [
     { name: 'Dashboard', href: '/', icon: 'HomeIcon' },
+    { name: 'Schedules', href: '/schedules', icon: 'ClockIcon' },
     { name: 'YouTube Channels', href: '/youtube/channels', icon: 'VideoCameraIcon' },
     { name: 'Statistics', href: '/statistics', icon: 'ChartBarIcon' },
 ];
@@ -66,6 +67,9 @@ const navigation = [
                     </svg>
                     <svg v-else-if="item.icon === 'VideoCameraIcon'" class="mr-3 h-5 w-5 flex-shrink-0" :class="url === item.href ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 group-hover:text-slate-500 dark:group-hover:text-slate-300'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    <svg v-else-if="item.icon === 'ClockIcon'" class="mr-3 h-5 w-5 flex-shrink-0" :class="url === item.href ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 group-hover:text-slate-500 dark:group-hover:text-slate-300'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     {{ item.name }}
                 </Link>
