@@ -31,11 +31,13 @@ const selectedChannelId = ref(null);
 const isDark = ref(false);
 const loadingChannels = ref(false);
 const sortBy = ref('latest');
+const styleTab = ref('script'); // 'script' or 'talking'
 
 const newStory = ref({
     title: '',
     content: '',
     style: 'story',
+    talking_style: 'none',
     aspect_ratio: '16:9',
     youtube_title: '',
     youtube_description: '',
@@ -130,6 +132,7 @@ const submitStory = async () => {
         toast.success('Story created successfully!');
         
         const currentStyle = newStory.value.style;
+        const currentTalkingStyle = newStory.value.talking_style;
         const currentAspectRatio = newStory.value.aspect_ratio;
         const currentYoutubeTokenId = newStory.value.youtube_token_id;
         
@@ -137,6 +140,7 @@ const submitStory = async () => {
             title: '',
             content: '',
             style: currentStyle,
+            talking_style: currentTalkingStyle,
             aspect_ratio: currentAspectRatio,
             youtube_title: '',
             youtube_description: '',
@@ -158,6 +162,7 @@ const generateStory = async () => {
         const response = await axios.post('/api/ai/generate-story', {
             title: newStory.value.title || 'a random interesting story',
             style: newStory.value.style,
+            talking_style: newStory.value.talking_style,
             aspect_ratio: newStory.value.aspect_ratio
         });
 
@@ -180,16 +185,60 @@ const generateStory = async () => {
 };
 
 const searchNews = async () => {
-    if (!newStory.value.search_query) return;
+    if (!newStory.value.search_query) {
+        toast.warning('Please enter a search query');
+        return;
+    }
     searching_news.value = true;
+    news_results.value = []; // Clear previous results
     try {
         const response = await axios.post('/api/ai/search-news', {
             query: newStory.value.search_query,
             style: newStory.value.style
         });
-        news_results.value = response.data;
+        
+        console.log('News API Response:', response.data);
+        
+        let results = [];
+        
+        // Handle various response formats
+        if (Array.isArray(response.data)) {
+            results = response.data;
+        } else if (response.data && typeof response.data === 'object') {
+            // Check for common wrapper keys
+            const possibleKeys = ['news', 'results', 'items', 'data', 'articles'];
+            for (const key of possibleKeys) {
+                if (Array.isArray(response.data[key])) {
+                    results = response.data[key];
+                    break;
+                }
+            }
+            // Check for error
+            if (response.data.error) {
+                toast.error(response.data.error);
+                return;
+            }
+        }
+        
+        // Filter to ensure each item has title and snippet
+        news_results.value = results.filter(item => item && item.title && item.snippet);
+        
+        console.log('Parsed news results:', news_results.value);
+        
+        if (news_results.value.length === 0) {
+            toast.info('No news found for this query. Try a different search term.');
+        } else {
+            toast.success(`Found ${news_results.value.length} news items!`);
+        }
     } catch (error) {
         console.error('Error searching news:', error);
+        if (error.response && error.response.data && error.response.data.error) {
+            toast.error(error.response.data.error);
+        } else if (error.message) {
+            toast.error('Search failed: ' + error.message);
+        } else {
+            toast.error('Failed to search news. Please try again.');
+        }
     } finally {
         searching_news.value = false;
     }
@@ -337,8 +386,14 @@ const confirmSchedule = async (scheduleData) => {
                     </div>
 
                     <div class="p-8">
+                        <!-- Script Style Section -->
                         <div class="mb-8">
-                            <label class="block text-slate-800 dark:text-white text-sm font-bold mb-4">Choose Your Style</label>
+                            <label class="block text-slate-800 dark:text-white text-sm font-bold mb-4">
+                                <span class="flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                    Content Style
+                                </span>
+                            </label>
                             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 <div v-for="style in [
                                     { id: 'story', name: 'General Story', desc: 'Any topic', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5S19.832 5.477 21 6.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253', gradient: 'from-blue-500 to-cyan-500' },
@@ -357,6 +412,35 @@ const confirmSchedule = async (scheduleData) => {
                                         <span class="block text-xs font-bold uppercase tracking-wider" :class="newStory.style === style.id ? 'text-white' : 'text-slate-700 dark:text-slate-300'">{{ style.name }}</span>
                                         <span class="block text-[10px] mt-1" :class="newStory.style === style.id ? 'text-white/70' : 'text-slate-500 dark:text-slate-400'">{{ style.desc }}</span>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Talking Style Section -->
+                        <div class="mb-8">
+                            <label class="block text-slate-800 dark:text-white text-sm font-bold mb-4">
+                                <span class="flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                                    Talking Style <span class="text-slate-400 dark:text-slate-500 font-normal">(Optional)</span>
+                                </span>
+                            </label>
+                            <div class="grid grid-cols-3 md:grid-cols-6 gap-3">
+                                <div v-for="style in [
+                                    { id: 'none', name: 'None', desc: 'Default', icon: 'M6 18L18 6M6 6l12 12', gradient: 'from-slate-400 to-slate-500' },
+                                    { id: 'opinion', name: 'Opinion', desc: 'Hot takes', icon: 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z', gradient: 'from-amber-500 to-orange-500' },
+                                    { id: 'storytime', name: 'Storytime', desc: 'Personal', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5S19.832 5.477 21 6.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253', gradient: 'from-pink-500 to-rose-500' },
+                                    { id: 'educational', name: 'Edu', desc: 'Explain', icon: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z', gradient: 'from-sky-500 to-blue-500' },
+                                    { id: 'reaction', name: 'Reaction', desc: 'React', icon: 'M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z', gradient: 'from-violet-500 to-purple-500' },
+                                    { id: 'vlog', name: 'Vlog', desc: 'Casual', icon: 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z', gradient: 'from-teal-500 to-cyan-500' }
+                                ]" :key="style.id"
+                                @click="newStory.talking_style = style.id"
+                                :class="['cursor-pointer p-3 rounded-xl border-2 transition-all flex flex-col items-center text-center space-y-1 group',
+                                         newStory.talking_style === style.id ? 'border-transparent bg-gradient-to-br shadow-lg ' + style.gradient + ' text-white' : 'border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-slate-50 dark:hover:bg-slate-800/50']">
+                                    <div :class="['w-8 h-8 rounded-lg flex items-center justify-center transition-all',
+                                                 newStory.talking_style === style.id ? 'bg-white/20 backdrop-blur-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400']">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="style.icon"></path></svg>
+                                    </div>
+                                    <span class="block text-[10px] font-bold uppercase tracking-wider" :class="newStory.talking_style === style.id ? 'text-white' : 'text-slate-700 dark:text-slate-300'">{{ style.name }}</span>
                                 </div>
                             </div>
                         </div>

@@ -28,12 +28,18 @@ class StoryController extends Controller
             'title' => 'nullable|string|max:255',
             'topic' => 'nullable|string|max:255',
             'style' => 'nullable|string|in:story,science_short,hollywood_hype,trade_wave',
+            'talking_style' => 'nullable|string|in:none,opinion,storytime,educational,reaction,vlog',
             'aspect_ratio' => 'nullable|string|in:16:9,9:16',
         ]);
 
         try {
             $topic = $request->title ?? $request->topic;
-            $storyData = $aiService->generateStory($topic, $request->style ?? 'story', $request->aspect_ratio ?? '16:9');
+            $storyData = $aiService->generateStory(
+                $topic, 
+                $request->style ?? 'story', 
+                $request->aspect_ratio ?? '16:9',
+                $request->talking_style ?? 'none'
+            );
             return response()->json($storyData);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Failed to generate story: ' . $e->getMessage()], 500);
@@ -46,6 +52,7 @@ class StoryController extends Controller
             'content' => 'required|string|min:10',
             'title' => 'nullable|string|max:255',
             'style' => 'nullable|string|in:story,science_short,hollywood_hype,trade_wave',
+            'talking_style' => 'nullable|string|in:none,opinion,storytime,educational,reaction,vlog',
             'aspect_ratio' => 'nullable|string|in:16:9,9:16',
             'youtube_title' => 'nullable|string|max:100',
             'youtube_description' => 'nullable|string',
@@ -57,6 +64,7 @@ class StoryController extends Controller
             'title' => $request->title ?? 'Untitled Story',
             'content' => $request->content,
             'style' => $request->style ?? 'story',
+            'talking_style' => $request->talking_style ?? 'none',
             'status' => 'pending',
             'aspect_ratio' => $request->aspect_ratio ?? '16:9',
             'youtube_title' => $request->youtube_title,
@@ -215,8 +223,9 @@ class StoryController extends Controller
             // Let's implement a simple AI-based news summary generator for now to avoid dependency on external API keys.
 
             $aiService = app(AiStoryService::class);
-            // We'll add a specific method to AiStoryService for this
-            $news = $aiService->searchNews($query);
+            // Pass style to get context-aware news (hollywood vs finance)
+            $style = $request->input('style', 'hollywood_hype');
+            $news = $aiService->searchNews($query, $style);
 
             return response()->json($news);
         } catch (\Exception $e) {

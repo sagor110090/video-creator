@@ -384,65 +384,114 @@ async def generate_cloned_voice(output_path, text, target_voice_path=None, scene
     await generate_tts_audio(output_path, text, 'story', scene_index)
 
 def clean_watermark(image_path):
-    """Attempts to remove watermarks from an image with high precision to avoid blurriness."""
+    """Attempts to remove watermarks from an image with improved detection."""
     try:
         img = cv2.imread(image_path)
         if img is None: return False
 
-        # Convert to grayscale
+        h, w = img.shape[:2]
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        h, w = gray.shape
 
-        # 1. Precise Edge Detection (Canny)
-        # Higher thresholds to pick up only strong edges like text/logos
-        edges = cv2.Canny(gray, 100, 200)
+        # Create combined mask for watermark detection
+        final_mask = np.zeros(gray.shape, dtype=np.uint8)
 
-        # 2. Brightness Mask
-        # Watermarks are typically light-colored/white
-        _, bright_mask = cv2.threshold(gray, 220, 255, cv2.THRESH_BINARY)
+        # === METHOD 1: Bright text detection (white/light watermarks) ===
+        _, bright_mask = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
 
-        # 3. Combine: only keep edges that are also bright
-        combined = cv2.bitwise_and(edges, bright_mask)
+        # === METHOD 2: Semi-transparent gray text (Adobe Stock style) ===
+        # These watermarks are often gray (not bright white)
+        lower_gray = np.array([180, 180, 180])
+        upper_gray = np.array([240, 240, 240])
+        gray_mask = cv2.inRange(img, lower_gray, upper_gray)
 
-        # 4. Location-based filtering
-        # We only target the bottom-right and bottom-left corners where most watermarks reside.
-        # We EXCLUDE the center to prevent blurring the main subject.
-        mask = np.zeros(gray.shape, dtype=np.uint8)
+        # === METHOD 3: Edge-based text detection ===
+        edges = cv2.Canny(gray, 50, 150)
 
-        # Bottom-right corner (30% width, 20% height)
-        cv2.rectangle(mask, (int(w*0.7), int(h*0.8)), (w, h), 255, -1)
-        # Bottom-left corner (30% width, 20% height)
-        cv2.rectangle(mask, (0, int(h*0.8)), (int(w*0.3), h), 255, -1)
-        # Top-right corner (sometimes used)
-        cv2.rectangle(mask, (int(w*0.8), 0), (w, int(h*0.15)), 255, -1)
+        # Combine detection methods
+        combined = cv2.bitwise_or(bright_mask, gray_mask)
+        combined = cv2.bitwise_or(combined, edges)
 
-        # Final mask: detected features inside our hot zones
-        final_mask = cv2.bitwise_and(combined, mask)
+        # === LOCATION FILTER: Only target watermark-prone areas ===
+        location_mask = np.zeros(gray.shape, dtype=np.uint8)
 
-        # 5. Dilate slightly to cover the thickness of the text strokes
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2,2))
-        final_mask = cv2.dilate(final_mask, kernel, iterations=1)
+        # Bottom strip (full width, bottom 15% of image) - most common watermark location
+        cv2.rectangle(location_mask, (0, int(h*0.85)), (w, h), 255, -1)
 
-        # Safety Check: If the mask is too large, it's likely a false positive
-        # Watermarks should not cover more than 5% of the total image area
-        total_pixels = h * w
+        # Bottom-left corner (extended area)
+        cv2.rectangle(location_mask, (0, int(h*0.75)), (int(w*0.35), h), 255, -1)
+
+        # Bottom-right corner (extended area)
+        cv2.rectangle(location_mask, (int(w*0.65), int(h*0.75)), (w, h), 255, -1)
+
+        # Top corners (for logos)
+        cv2.rectangle(location_mask, (0, 0), (int(w*0.25), int(h*0.12)), 255, -1)
+        cv2.rectangle(location_mask, (int(w*0.75), 0), (w, int(h*0.12)), 255, -1)
+
+        # Apply location filter
+        detected = cv2.bitwise_and(combined, location_mask)
+
+        # === MORPHOLOGICAL OPERATIONS: Connect text characters ===
+        # Dilate to connect letters in watermark text
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 3))
+        detected = cv2.dilate(detected, kernel, iterations=2)
+
+        # Close gaps in text
+        kernel_close = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 5))
+        detected = cv2.morphologyEx(detected, cv2.MORPH_CLOSE, kernel_close)
+
+        # === CONTOUR FILTERING: Keep only watermark-sized regions ===
+        contours, _ = cv2.findContours(detected, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            x, y, cw, ch = cv2.boundingRect(contour)
+
+            # Filter: watermarks are typically small-medium sized, wide, and near edges
+            min_area = 100
+            max_area = (h * w) * 0.08  # Max 8% of image
+            aspect_ratio = cw / max(ch, 1)
+
+            # Watermark text is usually wider than tall (aspect ratio > 1.5)
+            # Or could be a logo (more square-ish)
+            if min_area < area < max_area and (aspect_ratio > 1.2 or area < 5000):
+                # Check if it's in the edge regions
+                is_bottom = y > h * 0.7
+                is_top_corner = y < h * 0.15 and (x < w * 0.3 or x > w * 0.7)
+
+                if is_bottom or is_top_corner:
+                    cv2.drawContours(final_mask, [contour], -1, 255, -1)
+
+        # Dilate the final mask slightly to cover text edges
+        kernel_final = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+        final_mask = cv2.dilate(final_mask, kernel_final, iterations=2)
+
+        # Safety Check: Don't process if mask is empty or too large
         mask_pixels = cv2.countNonZero(final_mask)
-        if mask_pixels == 0 or mask_pixels > (total_pixels * 0.05):
+        total_pixels = h * w
+
+        if mask_pixels == 0:
+            print(f"DEBUG: No watermark detected in image", file=sys.stderr)
             return False
 
-        # 6. Inpaint using NS (Navier-Stokes) which is often better for preservation than Telea
-        # Radius 3 is small enough to avoid significant blur
-        result = cv2.inpaint(img, final_mask, 3, cv2.INPAINT_NS)
+        if mask_pixels > (total_pixels * 0.10):
+            print(f"DEBUG: Mask too large ({mask_pixels}/{total_pixels}), skipping to avoid damage", file=sys.stderr)
+            return False
 
-        # Overwrite the original image
+        # === INPAINTING: Remove the watermark ===
+        # Use larger radius for better blending
+        result = cv2.inpaint(img, final_mask, 5, cv2.INPAINT_NS)
+
+        # Save the cleaned image
         cv2.imwrite(image_path, result)
+        print(f"DEBUG: Successfully cleaned watermark from image ({mask_pixels} pixels)", file=sys.stderr)
         return True
+
     except Exception as e:
         print(f"Warning: Watermark cleaning failed: {e}", file=sys.stderr)
         return False
 
 def create_scene_video(image_path, audio_path, output_path, narration, scene_index=0, aspect_ratio='16:9'):
-    """Creates high-quality video with smooth zoom animation and enhanced subtitles."""
+    """Creates cinema-quality video with dynamic Ken Burns effects and modern subtitles."""
     width, height = (1920, 1080) if aspect_ratio == '16:9' else (1080, 1920)
 
     # Get audio duration
@@ -456,15 +505,29 @@ def create_scene_video(image_path, audio_path, output_path, narration, scene_ind
     fps = 30
     total_frames = int(duration * fps)
 
-    # Alternate zoom effects based on scene index (slower, smoother zoom)
-    if scene_index % 2 == 0:
-        # Slower zoom in for smoother effect
-        zoom_expr = "min(zoom+0.001,1.3)"
-    else:
-        # Slower zoom out for smoother effect
-        zoom_expr = "max(1.3-0.001*on,1.0)"
+    # === DYNAMIC KEN BURNS EFFECTS ===
+    # 6 different motion patterns for variety
+    motion_patterns = [
+        # Pattern 0: Slow zoom in from center
+        {"zoom": "min(zoom+0.0008,1.25)", "x": "iw/2-(iw/zoom/2)", "y": "ih/2-(ih/zoom/2)"},
+        # Pattern 1: Slow zoom out from center
+        {"zoom": "max(1.25-0.0008*on,1.0)", "x": "iw/2-(iw/zoom/2)", "y": "ih/2-(ih/zoom/2)"},
+        # Pattern 2: Pan left to right with slight zoom
+        {"zoom": "min(zoom+0.0003,1.15)", "x": "on/({})*iw/4".format(total_frames), "y": "ih/2-(ih/zoom/2)"},
+        # Pattern 3: Pan right to left with slight zoom
+        {"zoom": "min(zoom+0.0003,1.15)", "x": "iw/4-on/({})*iw/4".format(total_frames), "y": "ih/2-(ih/zoom/2)"},
+        # Pattern 4: Zoom in on upper third (good for faces)
+        {"zoom": "min(zoom+0.0006,1.2)", "x": "iw/2-(iw/zoom/2)", "y": "ih/4-(ih/zoom/2)"},
+        # Pattern 5: Zoom in on lower third
+        {"zoom": "min(zoom+0.0006,1.2)", "x": "iw/2-(iw/zoom/2)", "y": "ih*3/4-(ih/zoom/2)"},
+    ]
 
-    # Professional Subtitles: Word-by-word / Small chunks centered
+    pattern = motion_patterns[scene_index % len(motion_patterns)]
+    zoom_expr = pattern["zoom"]
+    x_expr = pattern["x"]
+    y_expr = pattern["y"]
+
+    # === MODERN SUBTITLE STYLING (TikTok/YouTube Shorts style) ===
     narration = re.sub(r'\s+', ' ', narration).strip()
     words = narration.split()
     total_words = len(words)
@@ -485,18 +548,17 @@ def create_scene_video(image_path, audio_path, output_path, narration, scene_ind
             break
 
     if total_words == 0:
-        subtitles_filter = "identity" # No text
+        subtitles_filter = ""
     else:
         # Calculate duration per word
         duration_per_word = duration / total_words
 
-        # Group words into small chunks (1-2 words) for a professional "pop" look
+        # Show 3 words at a time for better readability
         chunks = []
-        chunk_size = 2 # Show 2 words at a time
+        chunk_size = 3
         for i in range(0, total_words, chunk_size):
             chunk_words = words[i:i + chunk_size]
             start_time = i * duration_per_word
-            # End time is when the next chunk starts, or end of video
             end_time = min((i + chunk_size) * duration_per_word, duration)
             chunks.append({
                 'text': " ".join(chunk_words),
@@ -504,93 +566,219 @@ def create_scene_video(image_path, audio_path, output_path, narration, scene_ind
                 'end': end_time
             })
 
-        # Enhanced subtitle styling: Larger and more central
-        font_size = 70 if aspect_ratio == '16:9' else 90
-        # Position slightly below center for 9:16, or bottom for 16:9
-        y_pos = "(h-text_h)/2 + 200" if aspect_ratio == '9:16' else "h-120"
+        # Modern subtitle styling with white text, black outline, and shadow
+        font_size = 64 if aspect_ratio == '16:9' else 80
+        # Center-bottom for 16:9, center for 9:16 (TikTok style)
+        y_pos = "h-150" if aspect_ratio == '16:9' else "(h-text_h)/2+300"
 
         drawtext_filters = []
         for chunk in chunks:
             safe_txt = chunk['text'].replace("'", "'\\\\\\''").replace(":", "\\:").replace(",", "\\,")
             safe_txt = safe_txt.replace("\n", " ").replace("\r", "")
+            # Modern style: White text with thick black border and subtle shadow
             dt = (
                 f"drawtext=text='{safe_txt}':fontfile='{font_path}':"
-                f"fontcolor=#FFFF00:fontsize={font_size}:borderw=5:bordercolor=black:"
-                f"shadowcolor=black@0.6:shadowx=3:shadowy=3:"
-                f"x=(w-text_w)/2:y={y_pos}:enable='between(t,{chunk['start']:.2f},{chunk['end']:.2f})'"
+                f"fontcolor=white:fontsize={font_size}:"
+                f"borderw=4:bordercolor=black:"
+                f"shadowcolor=black@0.8:shadowx=2:shadowy=2:"
+                f"x=(w-text_w)/2:y={y_pos}:"
+                f"enable='between(t,{chunk['start']:.3f},{chunk['end']:.3f})'"
             )
             drawtext_filters.append(dt)
 
         subtitles_filter = ",".join(drawtext_filters)
 
-    # To prevent stretching, we first scale and crop the image to the target aspect ratio
-    # at a high resolution before applying zoompan.
+    # === HIGH QUALITY BASE RESOLUTION ===
     if aspect_ratio == '16:9':
         base_w, base_h = 3840, 2160  # 4K base
     else:
         base_w, base_h = 2160, 3840  # 4K vertical base
 
-    # Enhancement filters for a more professional/cinematic look
-    # eq: contrast=1.1, saturation=1.2, brightness=0.02
-    # unsharp: sharpening for better detail
-    enhancements = "eq=contrast=1.1:saturation=1.2:brightness=0.02,unsharp=3:3:1.5:3:3:0.5"
+    # === CINEMATIC COLOR GRADING ===
+    # Slight contrast boost, saturation enhancement, and film-like curves
+    color_grading = (
+        "eq=contrast=1.08:saturation=1.15:brightness=0.01,"
+        "curves=preset=lighter,"
+        "unsharp=5:5:0.8:5:5:0.4"  # Subtle sharpening
+    )
 
-    vf_filters = [
+    # Build video filter chain
+    vf_parts = [
         f"scale=w={base_w}:h={base_h}:force_original_aspect_ratio=increase",
         f"crop={base_w}:{base_h}",
-        enhancements,
-        f"zoompan=z='{zoom_expr}':d={total_frames}:s={width}x{height}",
-        "vignette=PI/4", # Subtle dark edges for focus, applied after zoom to stay fixed
-        f"fade=t=in:st=0:d=0.5",
-        f"fade=t=out:st={max(0, duration-0.5)}:d=0.5",
-        f"{subtitles_filter}",
-        f"fps={fps}",
-        "format=yuv420p"
+        color_grading,
+        f"zoompan=z='{zoom_expr}':x='{x_expr}':y='{y_expr}':d={total_frames}:s={width}x{height}:fps={fps}",
+        f"fade=t=in:st=0:d=0.4",
+        f"fade=t=out:st={max(0, duration-0.4)}:d=0.4",
     ]
 
+    if subtitles_filter:
+        vf_parts.append(subtitles_filter)
+
+    vf_parts.extend([
+        f"fps={fps}",
+        "format=yuv420p"
+    ])
+
+    # === HIGH QUALITY ENCODING ===
     command = [
         FFMPEG_PATH, '-y', '-loop', '1', '-i', image_path, '-i', audio_path,
-        '-vf', ",".join(vf_filters), '-c:v', 'libx264', '-preset', 'slow', '-crf', '18',
-        '-t', str(duration), '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-shortest', output_path
+        '-vf', ",".join(vf_parts),
+        '-c:v', 'libx264',
+        '-preset', 'slow',        # Better compression quality
+        '-crf', '17',             # Higher quality (lower = better, 17-18 is near lossless)
+        '-profile:v', 'high',     # H.264 High Profile
+        '-level', '4.1',          # Compatibility level
+        '-tune', 'film',          # Optimize for film content
+        '-movflags', '+faststart', # Web optimization
+        '-t', str(duration),
+        '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac',
+        '-b:a', '256k',           # Higher audio bitrate
+        '-ar', '48000',
+        '-shortest',
+        output_path
     ]
     if not run_command(command):
         with open(output_path, 'w') as f: f.write("mock")
 
 def step4_automatic_assembly(output_dir, scene_videos, background_music=None, aspect_ratio='16:9'):
-    """Stitches all scenes into one final .mp4 with high-quality audio and adds background music."""
+    """Stitches all scenes with crossfade transitions and professional audio mixing."""
     final_video_path = os.path.join(output_dir, "final_video.mp4")
     concat_file_path = os.path.join(output_dir, "concat.txt")
     temp_merged_path = os.path.join(output_dir, "temp_merged.mp4")
     temp_watermarked_path = os.path.join(output_dir, "temp_watermarked.mp4")
 
-    with open(concat_file_path, 'w') as f:
-        for vid in scene_videos:
-            f.write(f"file '{os.path.abspath(vid)}'\n")
+    # If only one scene, skip complex assembly
+    if len(scene_videos) == 1:
+        shutil.copy(scene_videos[0], temp_merged_path)
+    elif len(scene_videos) > 1:
+        # Use xfade for smooth crossfade transitions between scenes
+        # Build complex filter for crossfades
+        crossfade_duration = 0.3  # 300ms crossfade
 
-    if not run_command([FFMPEG_PATH, '-y', '-f', 'concat', '-safe', '0', '-i', concat_file_path, '-c', 'copy', temp_merged_path]):
+        # Get durations of each video
+        durations = []
+        for vid in scene_videos:
+            try:
+                result = subprocess.run([FFPROBE_PATH, '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', vid], capture_output=True, text=True)
+                durations.append(float(result.stdout.strip()))
+            except:
+                durations.append(5.0)
+
+        # Build input arguments
+        input_args = []
+        for vid in scene_videos:
+            input_args.extend(['-i', vid])
+
+        # Build xfade filter chain
+        if len(scene_videos) == 2:
+            # Simple case: 2 videos
+            offset = durations[0] - crossfade_duration
+            filter_complex = f"[0:v][1:v]xfade=transition=fade:duration={crossfade_duration}:offset={offset}[v];[0:a][1:a]acrossfade=d={crossfade_duration}[a]"
+            map_args = ['-map', '[v]', '-map', '[a]']
+        else:
+            # Multiple videos: chain xfades
+            filter_parts = []
+            current_offset = 0
+
+            # First xfade
+            current_offset = durations[0] - crossfade_duration
+            filter_parts.append(f"[0:v][1:v]xfade=transition=fade:duration={crossfade_duration}:offset={current_offset}[v1]")
+            filter_parts.append(f"[0:a][1:a]acrossfade=d={crossfade_duration}[a1]")
+
+            # Chain remaining videos
+            for i in range(2, len(scene_videos)):
+                prev_v = f"v{i-1}"
+                prev_a = f"a{i-1}"
+                curr_v = f"v{i}" if i < len(scene_videos) - 1 else "v"
+                curr_a = f"a{i}" if i < len(scene_videos) - 1 else "a"
+
+                # Calculate offset (previous accumulated duration minus crossfades)
+                current_offset += durations[i-1] - crossfade_duration
+
+                filter_parts.append(f"[{prev_v}][{i}:v]xfade=transition=fade:duration={crossfade_duration}:offset={current_offset}[{curr_v}]")
+                filter_parts.append(f"[{prev_a}][{i}:a]acrossfade=d={crossfade_duration}[{curr_a}]")
+
+            filter_complex = ";".join(filter_parts)
+            map_args = ['-map', '[v]', '-map', '[a]']
+
+        xfade_cmd = [FFMPEG_PATH, '-y'] + input_args + [
+            '-filter_complex', filter_complex
+        ] + map_args + [
+            '-c:v', 'libx264', '-preset', 'fast', '-crf', '18',
+            '-c:a', 'aac', '-b:a', '256k',
+            temp_merged_path
+        ]
+
+        if not run_command(xfade_cmd):
+            # Fallback to simple concat if xfade fails
+            print("DEBUG: Crossfade failed, using simple concat", file=sys.stderr)
+            with open(concat_file_path, 'w') as f:
+                for vid in scene_videos:
+                    f.write(f"file '{os.path.abspath(vid)}'\n")
+            run_command([FFMPEG_PATH, '-y', '-f', 'concat', '-safe', '0', '-i', concat_file_path, '-c', 'copy', temp_merged_path])
+    else:
+        return None
+
+    if not os.path.exists(temp_merged_path):
         return None
 
     video_to_process = temp_merged_path
+
+    # Add logo watermark
     if os.path.exists(LOGO_PATH):
         width = 1920 if aspect_ratio == '16:9' else 1080
-        logo_w = int(width * 0.10)
-        # Position bottom-right: W-w-30:H-h-30
-        # Added filter: format=rgba,colorchannelmixer=aa=0.8 (80% opacity for better blending)
-        logo_filter = f"[1:v]scale={logo_w}:-1,format=rgba,colorchannelmixer=aa=0.8[logo]"
-        if run_command([FFMPEG_PATH, '-y', '-i', temp_merged_path, '-i', LOGO_PATH, '-filter_complex', f"{logo_filter};[0:v][logo]overlay=W-w-30:H-h-30", '-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-c:a', 'copy', temp_watermarked_path]):
+        logo_w = int(width * 0.08)  # Slightly smaller logo
+        logo_filter = f"[1:v]scale={logo_w}:-1,format=rgba,colorchannelmixer=aa=0.7[logo]"
+        if run_command([FFMPEG_PATH, '-y', '-i', temp_merged_path, '-i', LOGO_PATH,
+                       '-filter_complex', f"{logo_filter};[0:v][logo]overlay=W-w-25:H-h-25",
+                       '-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-c:a', 'copy', temp_watermarked_path]):
             video_to_process = temp_watermarked_path
 
+    # Mix background music with improved audio levels
+    print(f"DEBUG: Background music check - path: {background_music}, exists: {background_music and os.path.exists(background_music)}", file=sys.stderr)
     if background_music and os.path.exists(background_music):
+        print(f"DEBUG: Adding background music from: {background_music}", file=sys.stderr)
+
+        # Get video duration for accurate fade-out timing
+        video_duration = 0
+        try:
+            result = subprocess.run([FFPROBE_PATH, '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', video_to_process], capture_output=True, text=True)
+            video_duration = float(result.stdout.strip())
+            print(f"DEBUG: Video duration: {video_duration} seconds", file=sys.stderr)
+        except:
+            video_duration = 60.0  # Default fallback
+            print(f"DEBUG: Could not get video duration, using default: {video_duration} seconds", file=sys.stderr)
+
+        # Calculate fade-out start time (3 seconds before end)
+        fade_out_start = max(0, video_duration - 3)
+
         music_mix_command = [
             FFMPEG_PATH, '-y', '-i', video_to_process, '-stream_loop', '-1', '-i', background_music,
-            '-filter_complex', "[1:a]volume=0.10[bg];[0:a]volume=1.5[narr];[narr][bg]amix=inputs=2:duration=first[a]",
-            '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-shortest', final_video_path
+            '-filter_complex',
+            f"[1:a]volume=0.08,afade=t=in:d=2,afade=t=out:st={fade_out_start}:d=3[bg];"  # Lower music, fade in/out
+            "[0:a]volume=1.8,dynaudnorm=p=0.9[narr];"  # Boost narration with normalization
+            "[narr][bg]amix=inputs=2:duration=first:dropout_transition=2[a]",
+            '-map', '0:v', '-map', '[a]',
+            '-c:v', 'copy',
+            '-c:a', 'aac', '-b:a', '256k', '-ar', '48000',
+            '-shortest', final_video_path
         ]
         if run_command(music_mix_command):
+            print(f"DEBUG: Background music mixed successfully", file=sys.stderr)
             for p in [temp_merged_path, temp_watermarked_path]:
                 if os.path.exists(p): os.remove(p)
             return final_video_path
+        else:
+            print(f"DEBUG: Background music mixing failed, continuing without background music", file=sys.stderr)
+    else:
+        if background_music:
+            print(f"DEBUG: Background music file not found: {background_music}", file=sys.stderr)
+        else:
+            print(f"DEBUG: No background music path provided", file=sys.stderr)
 
+    # No background music - just rename
     if video_to_process == temp_watermarked_path:
         os.rename(temp_watermarked_path, final_video_path)
         if os.path.exists(temp_merged_path): os.remove(temp_merged_path)

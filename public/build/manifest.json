@@ -3,8 +3,8 @@
     "file": "assets/AppLayout-BsBL7y5-.css",
     "src": "_AppLayout-BsBL7y5-.css"
   },
-  "_AppLayout-CcczSg_T.js": {
-    "file": "assets/AppLayout-CcczSg_T.js",
+  "_AppLayout-DgAo-hbn.js": {
+    "file": "assets/AppLayout-DgAo-hbn.js",
     "name": "AppLayout",
     "imports": [
       "resources/js/app.js"
@@ -18,7 +18,7 @@
     "name": "sweetalert2.esm.all"
   },
   "resources/css/app.css": {
-    "file": "assets/app-CgyYEPeN.css",
+    "file": "assets/app-DeXeGfzS.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -27,33 +27,33 @@
     ]
   },
   "resources/js/Pages/Schedules.vue": {
-    "file": "assets/Schedules-WOhKBjpW.js",
+    "file": "assets/Schedules-BQ6GSTH6.js",
     "name": "Schedules",
     "src": "resources/js/Pages/Schedules.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-CcczSg_T.js"
+      "_AppLayout-DgAo-hbn.js"
     ]
   },
   "resources/js/Pages/Statistics.vue": {
-    "file": "assets/Statistics-VPgqA86R.js",
+    "file": "assets/Statistics-8-wXBoUB.js",
     "name": "Statistics",
     "src": "resources/js/Pages/Statistics.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-CcczSg_T.js"
+      "_AppLayout-DgAo-hbn.js"
     ]
   },
   "resources/js/Pages/Welcome.vue": {
-    "file": "assets/Welcome-DWde0ouP.js",
+    "file": "assets/Welcome-CVUyaQjc.js",
     "name": "Welcome",
     "src": "resources/js/Pages/Welcome.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-CcczSg_T.js",
+      "_AppLayout-DgAo-hbn.js",
       "_sweetalert2.esm.all-BQxta0Da.js"
     ],
     "css": [
@@ -61,18 +61,18 @@
     ]
   },
   "resources/js/Pages/YouTubeChannels.vue": {
-    "file": "assets/YouTubeChannels-BcxL0fAu.js",
+    "file": "assets/YouTubeChannels-B8B0lCnS.js",
     "name": "YouTubeChannels",
     "src": "resources/js/Pages/YouTubeChannels.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-CcczSg_T.js",
+      "_AppLayout-DgAo-hbn.js",
       "_sweetalert2.esm.all-BQxta0Da.js"
     ]
   },
   "resources/js/app.js": {
-    "file": "assets/app-Behtw7vn.js",
+    "file": "assets/app-OAIXZfUj.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,

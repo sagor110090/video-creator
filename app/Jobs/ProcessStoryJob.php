@@ -86,6 +86,8 @@ class ProcessStoryJob implements ShouldQueue
             $visualPrefix = "news, celebrity, ";
         } elseif ($style === 'trade_wave') {
             $visualPrefix = "finance, business, ";
+        } elseif (str_starts_with($style, 'talking_')) {
+            $visualPrefix = "person talking, lifestyle, casual, ";
         }
 
         // 1. Filter valid sentences first

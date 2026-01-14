@@ -9,6 +9,7 @@ class VideoSchedule extends Model
     protected $fillable = [
         'topic',
         'style',
+        'talking_style',
         'aspect_ratio',
         'scheduled_time',
         'youtube_token_id',

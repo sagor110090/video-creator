@@ -90,7 +90,7 @@ class AiStoryService
         }
     }
 
-    public function generateStory(string $topic = null, string $style = 'story', string $aspectRatio = '16:9'): array
+    public function generateStory(string $topic = null, string $style = 'story', string $aspectRatio = '16:9', string $talkingStyle = 'none'): array
     {
         set_time_limit(180); // Increase PHP execution time for long story generation
         $isShorts = $aspectRatio === '9:16';
@@ -159,14 +159,45 @@ class AiStoryService
         $currentStyle = $stylePrompts[$style] ?? $stylePrompts['story'];
         $channelName = $currentStyle['name'];
 
-        $prompt = "You are a master scriptwriter for YouTube. Write a script for a {$duration} about: '{$topic}'.
+        // TALKING STYLE PATTERNS - Each has completely unique structure and opening
+        $talkingStylePatterns = [
+            'none' => [
+                'opening' => '',
+                'structure' => $currentStyle['structure'],
+                'tone' => 'Follow the base style instructions exactly.',
+            ],
+            'vlog' => [
+                'opening' => "MANDATORY FIRST WORDS: 'Okay, we NEED to talk about...' (exactly these words, no variations). Example: 'Okay, we NEED to talk about Taylor Swift's new album.'",
+                'structure' => "Hook announcement → Shock/reaction → Behind-the-scenes research → Fan/audience perspective → Personal opinion → Call to action",
+                'tone' => "Casual, conversational, energetic. Use phrases like: 'I'm shook', 'wait, hold on', 'the tea is hot', 'living for this', 'trust me on this', 'the crazy part is'. Make it feel like you FaceTiming a best friend.",
+            ],
+            'reaction' => [
+                'opening' => "MANDATORY FIRST WORDS: Either 'WAIT. Hold on a second.' OR 'Okay, stop everything.' followed immediately by 'Did you see this?!'. Example: 'WAIT. Hold on a second. Did you see this?!'",
+                'structure' => "Immediate shock → What happened → First thoughts → Emotional reaction → Breaking down the details → Final reaction",
+                'tone' => "High energy, shocked, authentic. Use: 'no way no way no way', 'I literally can't', 'this is insane', 'I'm screaming', 'you won't believe this'. React as if seeing it for the first time right now.",
+            ],
+            'storytime' => [
+                'opening' => "MANDATORY FIRST WORDS: Either 'Okay so storytime...' OR 'So this actually happened...' (exactly these phrases). Example: 'Okay so storytime... I was at the concert when...'",
+                'structure' => "Setting the scene → The event → The drama/twist → What happened next → The resolution → Lesson/takeaway",
+                'tone' => "Narrative, detailed, engaging. Use: 'let me tell you exactly what went down', 'and get this', 'the craziest part', 'so you're not gonna believe'. Tell it like a real story with dialogue and sensory details.",
+            ],
+            'opinion' => [
+                'opening' => "MANDATORY FIRST WORDS: Either 'Okay, I need to say something about...' OR 'Here's my take on...' (exactly these phrases). Example: 'Okay, I need to say something about this new movie.'",
+                'structure' => "Bold opinion → Your reasoning → Addressing counterarguments → Why you're right → Strong closing stance",
+                'tone' => "Confident, unapologetic, strong stance. Use: 'honestly', 'I don't care who gets offended', 'here's the thing', 'people might say', 'but let me explain'. Make it a hot take, not neutral.",
+            ],
+            'educational' => [
+                'opening' => "MANDATORY FIRST WORDS: Either 'Alright, so you've probably heard about...' OR 'Let me break this down for you...' (exactly these phrases). Example: 'Alright, so you've probably heard about Bitcoin ETFs.'",
+                'structure' => "What people think → What's actually true → Simple explanation → Real-world example → Key takeaway",
+                'tone' => "Clear, simple, teacher-like but casual. Use: 'think of it like', 'basically', 'the bottom line is', 'here's what you need to know', 'imagine if'. Break complex things into simple terms.",
+            ],
+        ];
 
-        STYLE: {$channelName}
-        INSTRUCTIONS:
-        {$currentStyle['instruction']}
+        // Get the talking style pattern
+        $talkingPattern = $talkingStylePatterns[$talkingStyle] ?? $talkingStylePatterns['none'];
 
-        STRUCTURE:
-        {$currentStyle['structure']}
+        // Build the prompt based on talking style
+        $commonRules = "
 
         THE '70 RULE' FOR YPP APPROVAL (CRITICAL):
         - UNIQUE ANGLE: Do not just state facts. Include a strong personal opinion, a witty joke, or a non-mainstream theory related to the topic.
@@ -180,18 +211,67 @@ class AiStoryService
         - AUTHENTICITY: Write as if you're speaking to a friend. Use occasional filler words like 'so', 'actually', 'you see', 'the thing is'.
         - VARIATION: Vary sentence length. Some short. Some a bit longer. Use fragments for emphasis.
         - LENGTH: EXACTLY {$wordCountRange} words. Do not be shorter or longer.
-        - FORMAT: Conversational, rhythmic, and engaging.
+        - FORMAT: Conversational, rhythmic, and engaging.";
 
-        Topic: {$topic}
+        if ($talkingStyle === 'none') {
+            // Use original base style when talking style is none
+            $prompt = "You are a master scriptwriter for YouTube. Write a script for a {$duration} about: '{$topic}'.
 
-        Format your response as a JSON object:
-        {
-          \"title\": \"A short, punchy 3-5 word title\",
-          \"content\": \"The full script text here...\",
-          \"youtube_title\": \"A viral, click-worthy YouTube title\",
-          \"youtube_description\": \"A description with a summary and hashtags\",
-          \"youtube_tags\": \"15 relevant tags separated by commas\"
-        }";
+            STYLE: {$channelName}
+             INSTRUCTIONS:
+            {$currentStyle['instruction']}
+
+            STRUCTURE:
+            {$currentStyle['structure']}
+            {$commonRules}
+
+            Topic: {$topic}
+
+            Format your response as a JSON object:
+            {
+              \"title\": \"A short, punchy 3-5 word title\",
+              \"content\": \"The full script text here...\",
+              \"youtube_title\": \"A viral, click-worthy YouTube title\",
+              \"youtube_description\": \"A description with a summary and hashtags\",
+              \"youtube_tags\": \"15 relevant tags separated by commas\"
+            }";
+        } else {
+            // Use unique talking style pattern - COMPLETELY different from base style
+            $prompt = "You are a master scriptwriter for YouTube. Write a script for a {$duration} about: '{$topic}'.
+
+            TALKING STYLE: {$talkingStyle} (UPPERCASE - THIS IS CRITICAL)
+
+            MANDATORY OPENING (MUST USE EXACTLY):
+            {$talkingPattern['opening']}
+
+            STRUCTURE (STRICT - MUST FOLLOW):
+            {$talkingPattern['structure']}
+
+            TONE INSTRUCTIONS:
+            {$talkingPattern['tone']}
+
+            WORD COUNT: EXACTLY {$wordCountRange} words. No more, no less.
+
+            CRITICAL RULES:
+            1. The opening MUST match the talking style exactly. Do not use openings from other styles.
+            2. The entire script must follow the {$talkingStyle} pattern - not the base {$channelName} style.
+            3. Each talking style has a unique personality - maintain it throughout.
+            4. Never mix talking styles (e.g., don't use vlog openings with reaction tone).
+            5. The opening is the most important - it MUST start with the exact phrase for {$talkingStyle} style.
+
+            {$commonRules}
+
+            Topic: {$topic}
+
+            Format your response as a JSON object:
+            {
+              \"title\": \"A short, punchy 3-5 word title\",
+              \"content\": \"The full script text here...\",
+              \"youtube_title\": \"A viral, click-worthy YouTube title\",
+              \"youtube_description\": \"A description with a summary and hashtags\",
+              \"youtube_tags\": \"15 relevant tags separated by commas\"
+            }";
+        }
 
         try {
             $systemMessage = "You are an expert human content creator. You write scripts that sound exactly like a real person talking, not an AI.
@@ -289,61 +369,84 @@ class AiStoryService
         }
     }
 
-    public function searchNews(string $query): array
+    public function searchNews(string $query, string $style = 'hollywood_hype'): array
     {
-        set_time_limit(120); // Increase PHP execution time for detailed news search
         $currentDate = date('Y-m-d');
-        $prompt = "Act as a real-time news search engine. Today's date is {$currentDate}.
-        For the query: '{$query}', provide 15 realistic, diverse, and very recent news snippets.
-        If the query is about Hollywood/Entertainment, focus on the absolute latest celebrity gossip, movie announcements, box office results, and viral social media moments from the last 24-48 hours.
-        If the query is about Trading/Finance/Market, focus on the latest stock movements, crypto price action, or economic breaking news.
 
-        CRITICAL:
-        - Ensure the news is different every time this is called by focusing on different sub-topics or recent events.
-        - Use a variety of sources (simulated) and perspectives.
-        - DO NOT repeat common old news. Look for the 'bleeding edge' of what might be happening NOW.
-        - DESCRIPTION LENGTH: Each 'snippet' must be a detailed paragraph (3-5 sentences, approx 60-100 words). It should include specific details, names, numbers, and the context of why this is trending.
+        // Context-aware prompts based on style
+        if ($style === 'trade_wave') {
+            $context = "Focus on: stock market movements, crypto prices, economic news, trading opportunities, market analysis, financial reports.";
+        } else {
+            $context = "Focus on: celebrity gossip, movie releases, box office news, TV shows, music industry, awards, Hollywood drama, entertainment viral moments.";
+        }
 
-        Each snippet should have a catchy 'title' and a 'snippet' (detailed summary).
+        $prompt = "Today is {$currentDate}. Query: '{$query}'.
+{$context}
 
-        Format your response as a JSON array of objects, like this:
-        [
-          {\"title\": \"...\", \"snippet\": \"...\"},
-          ... (up to 15 items)
-        ]";
+Provide 5 trending news items. Each needs:
+- 'title': Catchy headline
+- 'snippet': 2-3 sentence summary with specific details
+
+Return JSON array: [{\"title\": \"...\", \"snippet\": \"...\"}, ...]";
 
         try {
             $payload = [
                 'model' => $this->model,
                 'messages' => [
-                    ['role' => 'system', 'content' => "You are a real-time news aggregator for entertainment and finance. Today's date is {$currentDate}. Output ONLY valid JSON."],
+                    ['role' => 'system', 'content' => "You are a news API. Return ONLY valid JSON array. No markdown."],
                     ['role' => 'user', 'content' => $prompt]
                 ],
-                'temperature' => 0.95, // Even higher temperature for more variety
+                'temperature' => 0.85,
+                'max_tokens' => 1500,
             ];
 
             if ($this->provider === 'groq' || $this->provider === 'deepseek') {
                 $payload['response_format'] = ['type' => 'json_object'];
             }
 
-            $response = Http::timeout(90)->withHeaders([
+            $response = Http::timeout(45)->withHeaders([
                 'Authorization' => 'Bearer ' . $this->apiKey,
                 'Content-Type' => 'application/json',
             ])->post($this->baseUrl, $payload);
 
             if ($response->failed()) {
+                Log::error('News API request failed with status: ' . $response->status());
                 throw new \Exception("News generation failed");
             }
 
             $data = $response->json();
             $rawContent = $data['choices'][0]['message']['content'];
+            Log::info('News search raw response (first 1000 chars): ' . substr($rawContent, 0, 1000));
             $cleanContent = preg_replace('/^```json\s*|\s*```$/', '', trim($rawContent));
 
-            // If it's a single object instead of an array, wrap it
+            // Parse JSON and handle various response formats from different AI providers
             $decoded = json_decode($cleanContent, true);
-            if (isset($decoded['news'])) return array_slice($decoded['news'], 0, 15);
-            $results = is_array($decoded) ? $decoded : [$decoded];
-            return array_slice($results, 0, 15);
+
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                Log::warning('News search JSON parse error: ' . json_last_error_msg());
+                throw new \Exception('Invalid JSON response from AI');
+            }
+
+            // Handle various wrapper keys that AI might use
+            $possibleKeys = ['news', 'results', 'items', 'data', 'articles', 'stories'];
+            foreach ($possibleKeys as $key) {
+                if (isset($decoded[$key]) && is_array($decoded[$key])) {
+                    return array_slice($decoded[$key], 0, 5);
+                }
+            }
+
+            // If it's already a flat array of news items
+            if (is_array($decoded) && isset($decoded[0]) && isset($decoded[0]['title'])) {
+                return array_slice($decoded, 0, 5);
+            }
+
+            // If it's a single news item object, wrap it
+            if (isset($decoded['title']) && isset($decoded['snippet'])) {
+                return [$decoded];
+            }
+
+            Log::warning('Unexpected news response format: ' . substr($cleanContent, 0, 500));
+            throw new \Exception('Unexpected response format from AI');
 
         } catch (\Exception $e) {
             Log::error('News simulation failed: ' . $e->getMessage());

@@ -15,6 +15,7 @@ const editingSchedule = ref(null);
 const newSchedule = ref({
     topic: '',
     style: 'story',
+    talking_style: 'none',
     aspect_ratio: '16:9',
     scheduled_time: '',
     youtube_token_id: null
@@ -23,6 +24,7 @@ const newSchedule = ref({
 const editForm = ref({
     topic: '',
     style: 'story',
+    talking_style: 'none',
     aspect_ratio: '16:9',
     scheduled_time: '',
     youtube_token_id: null
@@ -72,6 +74,7 @@ const openEditModal = (schedule) => {
     editForm.value = {
         topic: schedule.topic || '',
         style: schedule.style || 'story',
+        talking_style: schedule.talking_style || 'none',
         aspect_ratio: schedule.aspect_ratio || '16:9',
         scheduled_time: schedule.scheduled_time ? schedule.scheduled_time.substring(0, 5) : '',
         youtube_token_id: schedule.youtube_token_id
@@ -187,7 +190,7 @@ onMounted(() => {
                     </div>
 
                     <div class="space-y-1">
-                        <label class="text-sm font-medium text-slate-700 dark:text-slate-300">Video Style</label>
+                        <label class="text-sm font-medium text-slate-700 dark:text-slate-300">Content Style</label>
                         <select
                             v-model="newSchedule.style"
                             class="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all dark:text-white"
@@ -196,6 +199,21 @@ onMounted(() => {
                             <option value="science_short">Science Short</option>
                             <option value="hollywood_hype">Hollywood Hype</option>
                             <option value="trade_wave">Trade Wave</option>
+                        </select>
+                    </div>
+
+                    <div class="space-y-1">
+                        <label class="text-sm font-medium text-slate-700 dark:text-slate-300">Talking Style</label>
+                        <select
+                            v-model="newSchedule.talking_style"
+                            class="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all dark:text-white"
+                        >
+                            <option value="none">None (Default)</option>
+                            <option value="opinion">Opinion</option>
+                            <option value="storytime">Storytime</option>
+                            <option value="educational">Educational</option>
+                            <option value="reaction">Reaction</option>
+                            <option value="vlog">Vlog</option>
                         </select>
                     </div>
 
@@ -382,7 +400,7 @@ onMounted(() => {
 
                                         <div class="grid grid-cols-2 gap-5">
                                             <div class="space-y-2">
-                                                <label class="text-sm font-bold text-slate-700 dark:text-slate-300 ml-1">Video Style</label>
+                                                <label class="text-sm font-bold text-slate-700 dark:text-slate-300 ml-1">Content Style</label>
                                                 <select v-model="editForm.style" class="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all dark:text-white font-medium">
                                                     <option value="story">Story</option>
                                                     <option value="science_short">Science Short</option>
@@ -391,12 +409,23 @@ onMounted(() => {
                                                 </select>
                                             </div>
                                             <div class="space-y-2">
-                                                <label class="text-sm font-bold text-slate-700 dark:text-slate-300 ml-1">Aspect Ratio</label>
-                                                <select v-model="editForm.aspect_ratio" class="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all dark:text-white font-medium">
-                                                    <option value="16:9">Widescreen (16:9)</option>
-                                                    <option value="9:16">Shorts/Reels (9:16)</option>
+                                                <label class="text-sm font-bold text-slate-700 dark:text-slate-300 ml-1">Talking Style</label>
+                                                <select v-model="editForm.talking_style" class="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all dark:text-white font-medium">
+                                                    <option value="none">None</option>
+                                                    <option value="opinion">Opinion</option>
+                                                    <option value="storytime">Storytime</option>
+                                                    <option value="educational">Educational</option>
+                                                    <option value="reaction">Reaction</option>
+                                                    <option value="vlog">Vlog</option>
                                                 </select>
                                             </div>
+                                        </div>
+                                        <div class="space-y-2">
+                                            <label class="text-sm font-bold text-slate-700 dark:text-slate-300 ml-1">Aspect Ratio</label>
+                                            <select v-model="editForm.aspect_ratio" class="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all dark:text-white font-medium">
+                                                <option value="16:9">Widescreen (16:9)</option>
+                                                <option value="9:16">Shorts/Reels (9:16)</option>
+                                            </select>
                                         </div>
                                     </div>
                                 </div>

@@ -12,6 +12,7 @@ class Story extends Model
         'title',
         'content',
         'style',
+        'talking_style',
         'status',
         'video_path',
         'aspect_ratio',
