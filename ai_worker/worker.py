@@ -1,4 +1,5 @@
 import sys
+import glob
 import json
 import os
 import subprocess
@@ -757,9 +758,9 @@ def step4_automatic_assembly(output_dir, scene_videos, background_music=None, as
         music_mix_command = [
             FFMPEG_PATH, '-y', '-i', video_to_process, '-stream_loop', '-1', '-i', background_music,
             '-filter_complex',
-            f"[1:a]volume=0.08,afade=t=in:d=2,afade=t=out:st={fade_out_start}:d=3[bg];"  # Lower music, fade in/out
-            "[0:a]volume=1.8,dynaudnorm=p=0.9[narr];"  # Boost narration with normalization
-            "[narr][bg]amix=inputs=2:duration=first:dropout_transition=2[a]",
+            f"[1:a]volume=0.25,afade=t=in:d=2,afade=t=out:st={fade_out_start}:d=3[bg];"  # Increased music volume
+            "[0:a]volume=1.5,dynaudnorm=p=0.9[narr];"  # Balanced narration
+            "[narr][bg]amix=inputs=2:duration=first:dropout_transition=2,volume=2[a]",
             '-map', '0:v', '-map', '[a]',
             '-c:v', 'copy',
             '-c:a', 'aac', '-b:a', '256k', '-ar', '48000',
@@ -808,7 +809,18 @@ async def main():
     aspect_ratio = data.get('aspect_ratio', '16:9')
     bg_music = data.get('background_music')
     if not bg_music or not os.path.exists(bg_music):
-        bg_music = os.path.join(project_root, 'public', 'audio', 'background.mp3')
+        # Fallback: Pick a random MP3 from public/audio/background/
+        audio_dir = os.path.join(project_root, 'public', 'audio', 'background')
+        available_music = glob.glob(os.path.join(audio_dir, '*.mp3'))
+
+        if available_music:
+            bg_music = random.choice(available_music)
+            print(f"DEBUG: Selected random background music from {audio_dir}: {bg_music}", file=sys.stderr)
+        else:
+            # Legacy fallback
+            audio_dir_legacy = os.path.join(project_root, 'public', 'audio')
+            bg_music = os.path.join(audio_dir_legacy, 'background.mp3')
+            print(f"DEBUG: No MP3s found in {audio_dir}, defaulting to {bg_music}", file=sys.stderr)
 
     if not os.path.exists(output_dir): os.makedirs(output_dir)
 

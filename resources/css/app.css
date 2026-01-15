@@ -14,6 +14,12 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
+    html {
+        text-rendering: optimizeLegibility;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
     ::-webkit-scrollbar {
         width: 8px;
         height: 8px;
@@ -46,6 +52,24 @@
     }
 }
 
+@layer components {
+    .glass-card {
+        background: rgba(255, 255, 255, 0.96);
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        box-shadow:
+            0 1px 0 rgba(2, 6, 23, 0.04),
+            0 10px 24px rgba(2, 6, 23, 0.06);
+    }
+
+    html.dark .glass-card {
+        background: rgba(2, 6, 23, 0.94);
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        box-shadow:
+            0 1px 0 rgba(255, 255, 255, 0.03),
+            0 18px 40px rgba(0, 0, 0, 0.38);
+    }
+}
+
 @layer utilities {
     .animate-in {
         animation-duration: 300ms;
@@ -66,5 +90,48 @@
     @keyframes slide-in {
         from { transform: translateY(var(--tw-enter-translate-y, 0)); }
         to { transform: translateY(0); }
+    }
+
+    .bg-mesh {
+        background-color: rgba(248, 250, 252, 1);
+        background-image:
+            linear-gradient(to bottom, rgba(255, 255, 255, 0.72), rgba(248, 250, 252, 1)),
+            repeating-linear-gradient(0deg, rgba(15, 23, 42, 0.012) 0 1px, rgba(15, 23, 42, 0) 1px 24px);
+    }
+
+    html.dark .bg-mesh {
+        background-color: rgba(2, 6, 23, 1);
+        background-image:
+            linear-gradient(to bottom, rgba(2, 6, 23, 0.92), rgba(2, 6, 23, 1)),
+            repeating-linear-gradient(0deg, rgba(148, 163, 184, 0.05) 0 1px, rgba(148, 163, 184, 0) 1px 26px);
+    }
+
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: rgba(148, 163, 184, 0.55);
+        border-radius: 999px;
+    }
+    html.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: rgba(71, 85, 105, 0.8);
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: rgba(100, 116, 139, 0.8);
+    }
+    html.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: rgba(148, 163, 184, 0.35);
+    }
+
+    .no-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+    .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
     }
 }

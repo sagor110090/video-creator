@@ -163,9 +163,9 @@ const formatScheduledDate = (dateString) => {
 </script>
 
 <template>
-    <div ref="cardRef" class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all duration-300 group flex flex-col h-full">
+    <div ref="cardRef" class="glass-card group flex flex-col h-full rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-lg">
         <!-- Video Preview Area -->
-        <div class="relative rounded-t-2xl overflow-hidden bg-slate-900 dark:bg-black aspect-video flex items-center justify-center">
+        <div class="relative overflow-hidden bg-slate-900 dark:bg-black aspect-video flex items-center justify-center">
             <template v-if="story.status === 'completed' && story.video_path">
                 <!-- Placeholder / Skeleton -->
                 <div v-if="!videoLoaded || !isVisible" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-800 animate-pulse">
