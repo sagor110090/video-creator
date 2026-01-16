@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch, computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { useForm } from '@inertiajs/vue3';
 import axios from 'axios';
@@ -44,6 +44,36 @@ const newStory = ref({
     youtube_tags: '',
     youtube_token_id: null,
     search_query: ''
+});
+
+const searchConfig = computed(() => {
+    const style = newStory.value.style;
+    if (style === 'hollywood_hype') {
+        return {
+            visible: true,
+            borderClass: 'border-l-4 border-l-rose-500',
+            iconBg: 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-300',
+            title: 'Hollywood News',
+            placeholder: 'e.g. Dakota Johnson latest news...'
+        };
+    } else if (style === 'bollywood_masala') {
+        return {
+            visible: true,
+            borderClass: 'border-l-4 border-l-orange-500',
+            iconBg: 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-900/50 text-orange-600 dark:text-orange-300',
+            title: 'Bollywood Masala News',
+            placeholder: 'e.g. SRK new movie, Pathaan box office...'
+        };
+    } else if (style === 'trade_wave') {
+        return {
+            visible: true,
+            borderClass: 'border-l-4 border-l-emerald-500',
+            iconBg: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900/50 text-emerald-600 dark:text-emerald-300',
+            title: 'Market Updates',
+            placeholder: 'e.g. Bitcoin price action today...'
+        };
+    }
+    return { visible: false };
 });
 
 const fetchStories = async (page = 1) => {
@@ -109,6 +139,7 @@ watch(() => newStory.value.style, (newStyle) => {
     let targetTitle = '';
     if (newStyle === 'science_short') targetTitle = 'The 60s Lab';
     else if (newStyle === 'hollywood_hype') targetTitle = 'Hollywood Hype';
+    else if (newStyle === 'bollywood_masala') targetTitle = 'Bollywood Masala';
     else if (newStyle === 'trade_wave') targetTitle = 'TradeWave';
 
     if (targetTitle) {
@@ -400,6 +431,7 @@ const confirmSchedule = async (scheduleData) => {
                                     { id: 'story', name: 'General Story', desc: 'Any topic', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5S19.832 5.477 21 6.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253', accent: 'text-sky-700 dark:text-sky-300', dot: 'bg-sky-500' },
                                     { id: 'science_short', name: '60s Lab', desc: 'Science facts', icon: 'M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.691.34a2 2 0 01-1.782 0l-.691-.34a6 6 0 00-3.86-.517l-2.387.477a2 2 0 00-1.022.547V18a2 2 0 002 2h12a2 2 0 002-2v-2.572zM12 11V3.5', accent: 'text-violet-700 dark:text-violet-300', dot: 'bg-violet-500' },
                                     { id: 'hollywood_hype', name: 'Hollywood', desc: 'Entertainment', icon: 'M7 4V20M17 4V20M3 8H7M17 8H21M3 12H21M3 16H7M17 16H21M4 20H20C21.1046 20 22 19.1046 22 18V6C22 4.89543 21.1046 4 20 4H4C2.89543 4 2 4.89543 2 6V18C2 19.1046 2.89543 20 4 20Z', accent: 'text-rose-700 dark:text-rose-300', dot: 'bg-rose-500' },
+                                    { id: 'bollywood_masala', name: 'Bollywood', desc: 'Masala News', icon: 'M7 4V20M17 4V20M3 8H7M17 8H21M3 12H21M3 16H7M17 16H21M4 20H20C21.1046 20 22 19.1046 22 18V6C22 4.89543 21.1046 4 20 4H4C2.89543 4 2 4.89543 2 6V18C2 19.1046 2.89543 20 4 20Z', accent: 'text-orange-700 dark:text-orange-300', dot: 'bg-orange-500' },
                                     { id: 'trade_wave', name: 'TradeWave', desc: 'Finance', icon: 'M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z', accent: 'text-emerald-700 dark:text-emerald-300', dot: 'bg-emerald-500' }
                                 ]" :key="style.id"
                                 @click="newStory.style = style.id"
@@ -449,21 +481,21 @@ const confirmSchedule = async (scheduleData) => {
                             </div>
                         </div>
 
-                        <div v-if="newStory.style === 'hollywood_hype' || newStory.style === 'trade_wave'"
+                        <div v-if="searchConfig.visible"
                              class="mb-8 p-6 rounded-2xl animate-in fade-in slide-in-from-top-4 duration-300 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800"
-                             :class="newStory.style === 'hollywood_hype' ? 'border-l-4 border-l-rose-500' : 'border-l-4 border-l-emerald-500'">
+                             :class="searchConfig.borderClass">
                             <div class="flex items-center space-x-3 mb-4">
-                                <div :class="['w-10 h-10 rounded-xl flex items-center justify-center border', newStory.style === 'hollywood_hype' ? 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-300' : 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900/50 text-emerald-600 dark:text-emerald-300']">
+                                <div :class="['w-10 h-10 rounded-xl flex items-center justify-center border', searchConfig.iconBg]">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"></path></svg>
                                 </div>
                                 <h3 class="font-bold text-lg text-slate-900 dark:text-white">
-                                    {{ newStory.style === 'hollywood_hype' ? 'Hollywood News' : 'Market Updates' }}
+                                    {{ searchConfig.title }}
                                 </h3>
                             </div>
                             <div class="flex space-x-3 mb-4">
                                 <input v-model="newStory.search_query" type="text"
                                        class="flex-1 px-5 py-3.5 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/10 transition-all shadow-sm dark:text-white text-sm"
-                                       :placeholder="newStory.style === 'hollywood_hype' ? 'e.g. Dakota Johnson latest news...' : 'e.g. Bitcoin price action today...'">
+                                       :placeholder="searchConfig.placeholder">
                                 <button @click="searchNews" :disabled="searching_news"
                                         class="px-6 py-3.5 rounded-xl font-bold disabled:opacity-50 text-sm flex items-center bg-slate-900 dark:bg-white text-white dark:text-slate-900 border border-slate-900 dark:border-white hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors shadow-sm">
                                     <svg v-if="searching_news" class="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>

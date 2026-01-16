@@ -28,6 +28,11 @@ class VideoSchedule extends Model
         return $this->belongsTo(Story::class);
     }
 
+    public function stories()
+    {
+        return $this->hasMany(Story::class);
+    }
+
     public function youtubeToken()
     {
         return $this->belongsTo(YoutubeToken::class, 'youtube_token_id');

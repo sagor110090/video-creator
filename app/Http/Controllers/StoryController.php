@@ -27,7 +27,7 @@ class StoryController extends Controller
         $request->validate([
             'title' => 'nullable|string|max:255',
             'topic' => 'nullable|string|max:255',
-            'style' => 'nullable|string|in:story,science_short,hollywood_hype,trade_wave',
+            'style' => 'nullable|string|in:story,science_short,hollywood_hype,bollywood_masala,trade_wave',
             'talking_style' => 'nullable|string|in:none,opinion,storytime,educational,reaction,vlog',
             'aspect_ratio' => 'nullable|string|in:16:9,9:16',
         ]);
@@ -35,8 +35,8 @@ class StoryController extends Controller
         try {
             $topic = $request->title ?? $request->topic;
             $storyData = $aiService->generateStory(
-                $topic, 
-                $request->style ?? 'story', 
+                $topic,
+                $request->style ?? 'story',
                 $request->aspect_ratio ?? '16:9',
                 $request->talking_style ?? 'none'
             );
@@ -51,13 +51,14 @@ class StoryController extends Controller
         $request->validate([
             'content' => 'required|string|min:10',
             'title' => 'nullable|string|max:255',
-            'style' => 'nullable|string|in:story,science_short,hollywood_hype,trade_wave',
+            'style' => 'nullable|string|in:story,science_short,hollywood_hype,bollywood_masala,trade_wave',
             'talking_style' => 'nullable|string|in:none,opinion,storytime,educational,reaction,vlog',
             'aspect_ratio' => 'nullable|string|in:16:9,9:16',
             'youtube_title' => 'nullable|string|max:100',
             'youtube_description' => 'nullable|string',
             'youtube_tags' => 'nullable|string',
             'youtube_token_id' => 'nullable|exists:youtube_tokens,id',
+            'scheduled_for' => 'nullable|date',
         ]);
 
         $story = Story::create([
@@ -71,6 +72,7 @@ class StoryController extends Controller
             'youtube_description' => $request->youtube_description,
             'youtube_tags' => $request->youtube_tags,
             'youtube_token_id' => $request->youtube_token_id,
+            'scheduled_for' => $request->scheduled_for,
         ]);
 
         ProcessStoryJob::dispatch($story);

@@ -48,11 +48,35 @@ class ProcessVideoSchedulesCommand extends Command
                 ]);
 
                 // 1. Generate Story Content using AI
-                $this->info("Generating story content for: {$schedule->topic}");
+                $topic = $schedule->topic;
+
+                // If the style is news-based, search for latest news first
+                $newsBasedStyles = ['hollywood_hype', 'bollywood_masala', 'trade_wave'];
+                if (in_array($schedule->style, $newsBasedStyles)) {
+                    $this->info("Searching for latest news for: {$schedule->topic}...");
+                    try {
+                        $newsItems = $aiService->searchNews($schedule->topic, $schedule->style);
+                        if (!empty($newsItems)) {
+                            // Pick the first/best news item
+                            $news = $newsItems[0];
+                            // Enrich the topic with the actual news content
+                            $topic = "Create a video about this news: {$news['title']}. Details: {$news['snippet']}";
+                            $this->info("Found news: {$news['title']}");
+                        } else {
+                            $this->warn("No news found for {$schedule->topic}, falling back to generic generation.");
+                        }
+                    } catch (\Exception $e) {
+                        $this->error("News search failed: " . $e->getMessage());
+                        // Fallback to original topic
+                    }
+                }
+
+                $this->info("Generating story content for: {$topic}");
                 $aiResponse = $aiService->generateStory(
-                    $schedule->topic ?: 'a random interesting story',
+                    $topic ?: 'a random interesting story',
                     $schedule->style,
-                    $schedule->aspect_ratio
+                    $schedule->aspect_ratio,
+                    $schedule->talking_style ?? 'none'
                 );
 
                 // 2. Create Story record
@@ -60,12 +84,15 @@ class ProcessVideoSchedulesCommand extends Command
                     'title' => $aiResponse['title'] ?? $schedule->topic,
                     'content' => $aiResponse['content'],
                     'style' => $schedule->style,
+                    'talking_style' => $schedule->talking_style ?? 'none',
                     'aspect_ratio' => $schedule->aspect_ratio,
                     'status' => 'pending',
                     'youtube_token_id' => $schedule->youtube_token_id,
                     'youtube_title' => $aiResponse['youtube_title'] ?? $aiResponse['title'],
                     'youtube_description' => $aiResponse['youtube_description'] ?? $aiResponse['content'],
                     'youtube_tags' => $aiResponse['youtube_tags'] ?? 'ai, story, animation',
+                    'video_schedule_id' => $schedule->id,
+                    'scheduled_for' => $now, // Record when this was scheduled for
                 ]);
 
                 $schedule->update([

@@ -46,6 +46,12 @@ class AiStoryService
             - Ensure the topic is fresh and highly relevant to the current week.
             - Return ONLY the topic name (2-5 words). No punctuation.",
 
+            'bollywood_masala' => "Generate ONE trending Bollywood or Indian Celebrity topic. Today's date is {$currentDate}.
+            - Focus on: Top stars (SRK, Salman, Deepika, Alia), major movie releases, or viral Indian pop culture moments.
+            - Examples: 'Pathaan Box Office Records', 'Alia Bhatt New Movie', 'Virat Kohli News'.
+            - Ensure the topic is fresh and highly relevant.
+            - Return ONLY the topic name (2-5 words). No punctuation.",
+
             'trade_wave' => "Generate ONE high-impact Trading or Finance topic. Today's date is {$currentDate}.
             - Focus on: Bitcoin/Crypto, S&P 500, Tech Stocks, or Global Economy.
             - Examples: 'Bitcoin Spot ETF Impact', 'AI Stock Market Rally', 'Interest Rate Decisions'.
@@ -83,6 +89,7 @@ class AiStoryService
             $fallbacks = [
                 'science_short' => 'Black Holes',
                 'hollywood_hype' => 'Celebrity News',
+                'bollywood_masala' => 'SRK New Movie',
                 'trade_wave' => 'Bitcoin Update',
                 'story' => 'The Hidden Library'
             ];
@@ -131,6 +138,18 @@ class AiStoryService
                 - Focus on specific details, fan reactions, and rumors.
                 - End with 'What do you guys think? Let me know in the comments!'",
                 'structure' => "Breaking News -> The Juicy Details -> Fan Reactions -> Your Hot Take -> Engagement",
+            ],
+            'bollywood_masala' => [
+                'name' => 'Bollywood',
+                'instruction' => "Write a high-energy, 'masala' Bollywood news script for a {$duration} in PURE HINDI (Devanagari Script). {$randomPerspective}
+                - LANGUAGE: HINDI (Written in Devanagari script: 'नमस्ते, आज हम बात करेंगे...').
+                - Word count: {$wordCountRange} words.
+                - Start with 'अरे सुनो! तुम्हें पता है क्या हुआ?' or 'भाई, यह क्या हो गया!'
+                - Use Bollywood slang naturally (धमाल, ब्लॉकबस्टर, सीन, बवाल).
+                - Make it feel like a chat with a filmy friend.
+                - Focus on specific details, box office numbers, and spicy rumors.
+                - End with 'तुम्हारा क्या ख्याल है? कमेंट्स में बताओ!'",
+                'structure' => "Breaking News (Dhamaka) -> The Juicy Details (Masala) -> Fan Reactions (Public Ka Mood) -> Your Hot Take -> Engagement",
             ],
             'trade_wave' => [
                 'name' => 'TradeWave',
@@ -193,6 +212,24 @@ class AiStoryService
             ],
         ];
 
+        // Override Talking Style Patterns for Bollywood Masala (Hinglish)
+        if ($style === 'bollywood_masala') {
+            $talkingStylePatterns['vlog']['opening'] = "MANDATORY FIRST WORDS: 'अरे सुनो! तुम्हें पता है क्या हुआ?' (Use exactly this). Example: 'अरे सुनो! तुम्हें पता है क्या हुआ रणवीर के साथ?'";
+            $talkingStylePatterns['vlog']['tone'] = "Casual, conversational Hindi (Devanagari). Use phrases like: 'यार, मैं तो हिल गया', 'भाई, सीन सेट है', 'मतलब कुछ भी हो रहा है'. Make it feel like a filmy gossip session.";
+
+            $talkingStylePatterns['reaction']['opening'] = "MANDATORY FIRST WORDS: 'ओए होए! यह क्या देख लिया मैंने?!' OR 'रुको रुको! सच में?!'. Example: 'ओए होए! यह क्या देख लिया मैंने?!'";
+            $talkingStylePatterns['reaction']['tone'] = "High energy, shocked, filmy drama. Use: 'भाई साहब!', 'उफ्फ, यह तो नेक्स्ट लेवल है', 'कसम से, मज़ा आ गया'. React like a true Bollywood fan.";
+
+            $talkingStylePatterns['storytime']['opening'] = "MANDATORY FIRST WORDS: 'सुनो, एक किस्सा सुनाता हूँ...' OR 'भाई, एक ज़बरदस्त बात बताता हूँ...'.";
+            $talkingStylePatterns['storytime']['tone'] = "Narrative, masala style. Use: 'कहानी में ट्विस्ट तब आया जब...', 'और फिर जो हुआ...', 'तुम मानोगे नहीं'.";
+
+            $talkingStylePatterns['opinion']['opening'] = "MANDATORY FIRST WORDS: 'मेरी बात लिख के ले लो...' OR 'सच बोलूँ तो...'.";
+            $talkingStylePatterns['opinion']['tone'] = "Confident, dabangg style. Use: 'दुनिया कुछ भी बोले', 'अपना तो सीधा हिसाब है'.";
+
+            $talkingStylePatterns['educational']['opening'] = "MANDATORY FIRST WORDS: 'चलो, आज का ज्ञान लेते हैं...' OR 'इसका असली सच क्या है...'.";
+            $talkingStylePatterns['educational']['tone'] = "Simple, clear Hindi. Explain like you're talking to a friend at a chai tapri.";
+        }
+
         // Get the talking style pattern
         $talkingPattern = $talkingStylePatterns[$talkingStyle] ?? $talkingStylePatterns['none'];
 
@@ -236,10 +273,17 @@ class AiStoryService
               \"youtube_tags\": \"15 relevant tags separated by commas\"
             }";
         } else {
+            // Add explicit language instruction for Bollywood even in Talking Style mode
+            $languageInstruction = "";
+            if ($style === 'bollywood_masala') {
+                $languageInstruction = "LANGUAGE: HINDI (Written in Devanagari script). Use authentic Bollywood slang (e.g., 'धमाल', 'बवाल').";
+            }
+
             // Use unique talking style pattern - COMPLETELY different from base style
             $prompt = "You are a master scriptwriter for YouTube. Write a script for a {$duration} about: '{$topic}'.
 
             TALKING STYLE: {$talkingStyle} (UPPERCASE - THIS IS CRITICAL)
+            {$languageInstruction}
 
             MANDATORY OPENING (MUST USE EXACTLY):
             {$talkingPattern['opening']}
@@ -376,6 +420,8 @@ class AiStoryService
         // Context-aware prompts based on style
         if ($style === 'trade_wave') {
             $context = "Focus on: stock market movements, crypto prices, economic news, trading opportunities, market analysis, financial reports.";
+        } elseif ($style === 'bollywood_masala') {
+            $context = "Focus on: Bollywood celebrity gossip, Hindi movie releases, box office numbers, Indian music industry, Mumbai film industry news, viral Indian pop culture.";
         } else {
             $context = "Focus on: celebrity gossip, movie releases, box office news, TV shows, music industry, awards, Hollywood drama, entertainment viral moments.";
         }

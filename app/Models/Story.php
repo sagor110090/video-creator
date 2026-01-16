@@ -25,6 +25,7 @@ class Story extends Model
         'youtube_token_id',
         'youtube_error',
         'scheduled_for',
+        'video_schedule_id',
     ];
 
     protected $casts = [
@@ -36,6 +37,11 @@ class Story extends Model
     public function scenes()
     {
         return $this->hasMany(Scene::class)->orderBy('order');
+    }
+
+    public function videoSchedule()
+    {
+        return $this->belongsTo(VideoSchedule::class);
     }
 
     public function youtubeChannel()

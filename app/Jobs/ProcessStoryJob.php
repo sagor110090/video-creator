@@ -53,7 +53,7 @@ class ProcessStoryJob implements ShouldQueue
             $freshStory = $this->story->fresh();
 
             // Auto-upload if it's from a schedule or has a channel selected
-            if ($freshStory->youtube_token_id) {
+            if ($freshStory->youtube_token_id && $freshStory->video_schedule_id) {
                 Log::info("Auto-dispatching YouTube upload for Story ID: {$freshStory->id}");
                 UploadToYouTubeJob::dispatch($freshStory);
             }
@@ -78,15 +78,18 @@ class ProcessStoryJob implements ShouldQueue
         $sentences = preg_split('/(?<=[.!?])\s+/', $content, -1, PREG_SPLIT_NO_EMPTY);
 
         $style = $this->story->style ?? 'story';
+        $talkingStyle = $this->story->talking_style ?? 'none';
         $visualPrefix = "";
 
         if ($style === 'science_short') {
             $visualPrefix = "science, technology, ";
         } elseif ($style === 'hollywood_hype') {
             $visualPrefix = "news, celebrity, ";
+        } elseif ($style === 'bollywood_masala') {
+            $visualPrefix = "indian cinema, bollywood, colorful, ";
         } elseif ($style === 'trade_wave') {
             $visualPrefix = "finance, business, ";
-        } elseif (str_starts_with($style, 'talking_')) {
+        } elseif (str_starts_with($style, 'talking_') || ($talkingStyle !== 'none' && $talkingStyle !== null)) {
             $visualPrefix = "person talking, lifestyle, casual, ";
         }
 

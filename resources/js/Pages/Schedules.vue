@@ -198,6 +198,7 @@ onMounted(() => {
                             <option value="story">Story</option>
                             <option value="science_short">Science Short</option>
                             <option value="hollywood_hype">Hollywood Hype</option>
+                            <option value="bollywood_masala">Bollywood Masala</option>
                             <option value="trade_wave">Trade Wave</option>
                         </select>
                     </div>
@@ -405,6 +406,7 @@ onMounted(() => {
                                                     <option value="story">Story</option>
                                                     <option value="science_short">Science Short</option>
                                                     <option value="hollywood_hype">Hollywood Hype</option>
+                                                    <option value="bollywood_masala">Bollywood Masala</option>
                                                     <option value="trade_wave">Trade Wave</option>
                                                 </select>
                                             </div>
