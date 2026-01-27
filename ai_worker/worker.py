@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 import torch
 from chatterbox.tts import ChatterboxTTS
 from chatterbox.vc import ChatterboxVC
+from chatterbox.mtl_tts import ChatterboxMultilingualTTS
 from scipy.io import wavfile
 
 # Load .env from project root
@@ -50,10 +51,28 @@ TARGET_VOICE_PATH = os.path.join(project_root, 'public', 'audio', 'sample.m4a')
 
 # Initialize Chatterbox models
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-print(f"Initializing Chatterbox models on {DEVICE}...", file=sys.stderr)
-tts_model = ChatterboxTTS.from_pretrained(DEVICE)
-vc_model = ChatterboxVC.from_pretrained(DEVICE)
-print("Chatterbox models initialized successfully!", file=sys.stderr)
+tts_model = None
+vc_model = None
+
+def is_devanagari(text):
+    """Detects if a string contains Devanagari (Hindi) characters."""
+    for char in text:
+        if '\u0900' <= char <= '\u097F':
+            return True
+    return False
+
+def init_models(language='en'):
+    global tts_model, vc_model
+    if tts_model is not None: return
+
+    print(f"Initializing Chatterbox models on {DEVICE} for language: {language}...", file=sys.stderr)
+
+    # Use Multilingual TTS for all languages (English, Hindi, etc.) as it supports voice cloning natively
+    # and is the superior model.
+    tts_model = ChatterboxMultilingualTTS.from_pretrained(DEVICE)
+    vc_model = None  # Multilingual model handles voice cloning internally
+
+    print("Chatterbox models initialized successfully!", file=sys.stderr)
 
 STOPWORDS = {
     'a', 'an', 'the', 'and', 'or', 'but', 'if', 'because', 'as', 'what',
@@ -216,15 +235,74 @@ def process_text_for_naturalness(text):
     text = re.sub(r'<[^>]*>', '', text)
 
     # Add natural pauses using punctuation that the neural engine understands
-    text = text.replace('... ', '... ')
-    text = text.replace('. ', '... ') # Pause between sentences
-    text = text.replace(', ', ', ')   # Natural breath pause
+    text = text.replace('... ', '. ') # Keep pauses normal
+    text = text.replace('. ', '. ')   # Standard sentence pause
+    text = text.replace(', ', ', ')   # Standard breath pause
 
     return text.strip()
 
 async def generate_tts_audio(output_path, text, style='story', scene_index=0, language='en'):
-    """Generates 100% human-like audio using official parameters for natural cadence."""
-    # Voice mapping
+    """Generates audio using ChatterboxMultilingualTTS for the best AI quality."""
+    global tts_model
+
+    # Per-scene language detection
+    current_language = language
+    if current_language == 'en' and is_devanagari(text):
+        current_language = 'hi'
+
+    # Ensure model is initialized
+    if tts_model is None:
+        init_models(current_language)
+
+    temp_wav = None
+    try:
+        print(f"DEBUG: Generating Chatterbox Multilingual audio for scene {scene_index} (Language: {current_language})", file=sys.stderr)
+
+        if isinstance(tts_model, ChatterboxMultilingualTTS):
+             tts_wav = tts_model.generate(
+                 text,
+                 language_id=current_language,
+                 audio_prompt_path=None # No voice cloning for regular TTS
+             )
+        else:
+             tts_wav = tts_model.generate(text)
+
+        # Save to temporary WAV
+        temp_wav = output_path.replace('.mp3', '_gen.wav')
+        wav_numpy = tts_wav.squeeze(0).numpy()
+        wavfile.write(temp_wav, tts_model.sr, wav_numpy.astype(np.float32))
+
+        # STUDIO QUALITY POST-PROCESSING
+        convert_cmd = [
+            FFMPEG_PATH, '-y', '-i', temp_wav,
+            '-af', (
+                'volume=4.5,'             # Boost volume significantly
+                'dynaudnorm=p=0.95:s=5,'  # Professional dynamic normalization
+                'aecho=0.8:0.88:6:0.4,'   # Subtle room presence
+                'highpass=f=80,'          # Remove low-end rumble
+                'lowpass=f=15000,'        # Remove harsh high-end hiss
+                'atempo=1.0'              # Normal speed (1.0) for better energy
+            ),
+            '-ar', '48000',
+            '-ac', '2',
+            '-q:a', '0',
+            output_path
+        ]
+
+        success = run_command(convert_cmd)
+
+        if success and os.path.exists(output_path):
+            print(f"DEBUG: Successfully generated Chatterbox audio at {output_path}", file=sys.stderr)
+            return
+
+    except Exception as e:
+        print(f"Error: Chatterbox TTS failed: {e}. Falling back to edge_tts...", file=sys.stderr)
+    finally:
+        if temp_wav and os.path.exists(temp_wav):
+            os.remove(temp_wav)
+
+    # Fallback to edge_tts if Chatterbox fails
+    # Voice mapping for edge_tts
     voices = {
         'science_short': 'en-US-SteffanNeural',
         'hollywood_hype': 'en-US-AvaNeural',
@@ -233,7 +311,7 @@ async def generate_tts_audio(output_path, text, style='story', scene_index=0, la
     }
 
     # Hindi voice mapping
-    if language.lower().startswith('hi'):
+    if current_language.lower().startswith('hi'):
         voices = {
             'science_short': 'hi-IN-MadhurNeural',
             'hollywood_hype': 'hi-IN-SwaraNeural',
@@ -243,23 +321,20 @@ async def generate_tts_audio(output_path, text, style='story', scene_index=0, la
         }
 
     voice = voices.get(style, voices['story'])
-
-    # Clean and enhance text punctuation for better flow
     clean_text = process_text_for_naturalness(text)
 
-    # Personality-based prosody settings
+    # Personality-based prosody settings for edge_tts
     personalities = {
-        'science_short': {'rate': '-15%', 'pitch': '-1Hz'},
-        'hollywood_hype': {'rate': '-5%', 'pitch': '+2Hz'},
-        'trade_wave': {'rate': '-15%', 'pitch': '-2Hz'},
-        'story': {'rate': '-35%', 'pitch': '+1Hz'},
-        'bollywood_masala': {'rate': '-5%', 'pitch': '+2Hz'}
+        'science_short': {'rate': '-5%', 'pitch': '-1Hz'},
+        'hollywood_hype': {'rate': '+0%', 'pitch': '+2Hz'},
+        'trade_wave': {'rate': '-5%', 'pitch': '-2Hz'},
+        'story': {'rate': '-10%', 'pitch': '+1Hz'},
+        'bollywood_masala': {'rate': '+0%', 'pitch': '+2Hz'}
     }
     config = personalities.get(style, personalities['story'])
 
-    # Add "Human Variation" based on scene index to break robotic repetition
-    scene_pitch_mod = (scene_index % 3 - 1) * 2 # -2Hz, 0Hz, or +2Hz
-    scene_rate_mod = (scene_index % 2) * 2 # 0% or +2%
+    scene_pitch_mod = (scene_index % 3 - 1) * 2
+    scene_rate_mod = (scene_index % 2) * 2
 
     base_rate = int(config['rate'].replace('%', ''))
     base_pitch = int(config['pitch'].replace('Hz', ''))
@@ -269,7 +344,7 @@ async def generate_tts_audio(output_path, text, style='story', scene_index=0, la
 
     temp_audio = output_path.replace('.mp3', '_temp.mp3')
 
-    print(f"DEBUG: Generating ultra-realistic human voice: {voice} (Rate: {final_rate}, Pitch: {final_pitch}, Scene {scene_index})", file=sys.stderr)
+    print(f"DEBUG: Generating edge_tts fallback: {voice}", file=sys.stderr)
 
     success = False
     try:
@@ -278,39 +353,28 @@ async def generate_tts_audio(output_path, text, style='story', scene_index=0, la
         if os.path.exists(temp_audio) and os.path.getsize(temp_audio) > 0:
             success = True
     except Exception as e:
-        print(f"Warning: TTS generation failed: {e}. Falling back to plain text.", file=sys.stderr)
-        try:
-            communicate = edge_tts.Communicate(text, voice)
-            await communicate.save(temp_audio)
-            if os.path.exists(temp_audio) and os.path.getsize(temp_audio) > 0:
-                success = True
-        except Exception as e2:
-            print(f"Error: Fallback TTS failed: {e2}", file=sys.stderr)
+        print(f"Warning: Fallback TTS failed: {e}", file=sys.stderr)
 
     if success and os.path.exists(temp_audio):
-        # STUDIO QUALITY POST-PROCESSING
+        # Post-process the fallback audio
         convert_cmd = [
             FFMPEG_PATH, '-y', '-i', temp_audio,
             '-af', (
-                'volume=4.5,'             # Boost volume significantly
-                'dynaudnorm=p=0.95:s=5,'  # Professional dynamic normalization (increased peak)
-                'aecho=0.8:0.88:6:0.4,'   # Subtle room presence
-                'highpass=f=80,'          # Remove low-end rumble
-                'lowpass=f=15000'         # Remove harsh high-end hiss
+                'volume=4.5,'
+                'dynaudnorm=p=0.95:s=5,'
+                'aecho=0.8:0.88:6:0.4,'
+                'highpass=f=80,'
+                'lowpass=f=15000'
             ),
             '-ar', '48000',
             '-ac', '2',
             '-q:a', '0',
             output_path
         ]
-        if not run_command(convert_cmd):
-            os.replace(temp_audio, output_path)
-            success = True
-
-    # Cleanup
-    if os.path.exists(temp_audio): os.remove(temp_audio)
-
-    if success: return
+        run_command(convert_cmd)
+        if os.path.exists(temp_audio):
+            os.remove(temp_audio)
+        return
 
     # Fallback to macOS 'say'
     if sys.platform == 'darwin':
@@ -321,6 +385,7 @@ async def generate_tts_audio(output_path, text, style='story', scene_index=0, la
             if os.path.exists(temp_aiff): os.remove(temp_aiff)
             return
 
+
     # Final fallback to silence
     print(f"Warning: Falling back to silence.", file=sys.stderr)
     run_command([FFMPEG_PATH, '-y', '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo', '-t', '5', output_path])
@@ -328,46 +393,70 @@ async def generate_tts_audio(output_path, text, style='story', scene_index=0, la
 async def generate_cloned_voice(output_path, text, target_voice_path=None, scene_index=0, language='en', style='story'):
     """Generates audio using ChatterboxTTS and ChatterboxVC for voice cloning."""
 
-    # If language is Hindi, skip voice cloning (as Chatterbox might not support it well) and use Edge TTS directly
-    if language.lower().startswith('hi'):
-        print(f"DEBUG: Hindi language detected. Using Edge TTS for better quality.", file=sys.stderr)
-        await generate_tts_audio(output_path, text, style, scene_index, language)
-        return
+    # Ensure models are initialized (if not already by main)
+    global tts_model, vc_model
+
+    temp_tts_path = None
+    temp_output_wav = None
+    target_wav_path = None
+
+    # Per-scene language detection (if it's English but text is Hindi)
+    current_language = language
+    if current_language == 'en' and is_devanagari(text):
+        current_language = 'hi'
+
+    if tts_model is None:
+         init_models(current_language)
 
     try:
-        print(f"DEBUG: Generating cloned voice with target: {target_voice_path}", file=sys.stderr)
+        print(f"DEBUG: Generating cloned voice with target: {target_voice_path} (Language: {current_language})", file=sys.stderr)
 
-        # First, generate TTS from text
-        tts_wav = tts_model.generate(text)
+        # Generate TTS with voice cloning if target voice is provided
+        if isinstance(tts_model, ChatterboxMultilingualTTS):
+             # For Multilingual model, we pass audio_prompt_path for voice cloning
+             # and language_id for language selection
+             tts_wav = tts_model.generate(
+                 text,
+                 language_id=current_language,
+                 audio_prompt_path=target_voice_path if target_voice_path and os.path.exists(target_voice_path) else None
+             )
+        else:
+             tts_wav = tts_model.generate(text)
 
         # Save TTS output to temporary WAV file
         temp_tts_path = output_path.replace('.mp3', '_tts.wav')
         tts_numpy = tts_wav.squeeze(0).numpy()
         wavfile.write(temp_tts_path, tts_model.sr, tts_numpy.astype(np.float32))
 
-        # Convert target voice to WAV if it's not already
-        target_wav_path = None
-        if target_voice_path and os.path.exists(target_voice_path):
-            target_wav_path = output_path.replace('.mp3', '_target.wav')
-            if target_voice_path.endswith('.m4a'):
-                convert_cmd = [
-                    FFMPEG_PATH, '-y', '-i', target_voice_path,
-                    '-ar', str(tts_model.sr), '-ac', '1',
-                    target_wav_path
-                ]
-                if not run_command(convert_cmd):
-                    print(f"Warning: Failed to convert target voice to WAV", file=sys.stderr)
-                    target_wav_path = None
-            else:
-                target_wav_path = target_voice_path
+        # No separate VC step needed for Multilingual model
+        if vc_model:
+            # Convert target voice to WAV if it's not already
+            target_wav_path = None
+            if target_voice_path and os.path.exists(target_voice_path):
+                target_wav_path = output_path.replace('.mp3', '_target.wav')
+                if target_voice_path.endswith('.m4a'):
+                    convert_cmd = [
+                        FFMPEG_PATH, '-y', '-i', target_voice_path,
+                        '-ar', str(tts_model.sr), '-ac', '1',
+                        target_wav_path
+                    ]
+                    if not run_command(convert_cmd):
+                        print(f"Warning: Failed to convert target voice to WAV", file=sys.stderr)
+                        target_wav_path = None
+                else:
+                    target_wav_path = target_voice_path
 
-        # Apply voice cloning to TTS output
-        wav = vc_model.generate(temp_tts_path, target_voice_path=target_wav_path)
+            wav = vc_model.generate(temp_tts_path, target_voice_path=target_wav_path)
+            sr = vc_model.sr
+        else:
+            # Use the TTS output directly
+            wav = tts_wav
+            sr = tts_model.sr
 
         # Save final output as WAV first
         temp_output_wav = output_path.replace('.mp3', '_output.wav')
         wav_numpy = wav.squeeze(0).numpy()
-        wavfile.write(temp_output_wav, vc_model.sr, wav_numpy.astype(np.float32))
+        wavfile.write(temp_output_wav, sr, wav_numpy.astype(np.float32))
 
         # Convert to MP3 with quality settings
         convert_cmd = [
@@ -378,7 +467,7 @@ async def generate_cloned_voice(output_path, text, target_voice_path=None, scene
                 'aecho=0.8:0.88:6:0.4,'   # Subtle room presence
                 'highpass=f=80,'          # Remove low-end rumble
                 'lowpass=f=15000,'        # Remove harsh high-end hiss
-                'atempo=0.80'             # Slower speed (80%) for ChatterboxTTS naturalness
+                'atempo=1.0'              # Normal speed (1.0) for better energy
             ),
             '-ar', '48000',
             '-ac', '2',
@@ -388,23 +477,24 @@ async def generate_cloned_voice(output_path, text, target_voice_path=None, scene
 
         success = run_command(convert_cmd)
 
-        # Cleanup temporary files
-        for temp_file in [temp_tts_path, temp_output_wav]:
-            if target_wav_path and temp_file != target_wav_path and os.path.exists(temp_file):
-                os.remove(temp_file)
-        if target_wav_path and target_wav_path != target_voice_path and os.path.exists(target_wav_path):
-            os.remove(target_wav_path)
-
         if success and os.path.exists(output_path):
             print(f"DEBUG: Successfully generated cloned voice at {output_path}", file=sys.stderr)
             return
 
     except Exception as e:
         print(f"Error: Voice cloning failed: {e}", file=sys.stderr)
+    finally:
+        # Cleanup temporary files
+        for temp_file in [temp_tts_path, temp_output_wav]:
+            if temp_file and os.path.exists(temp_file):
+                os.remove(temp_file)
 
-    # Fallback to edge_tts if voice cloning fails
-    print(f"Warning: Falling back to edge_tts for scene {scene_index}", file=sys.stderr)
-    await generate_tts_audio(output_path, text, style, scene_index, language)
+        if target_wav_path and target_wav_path != target_voice_path and os.path.exists(target_wav_path):
+            os.remove(target_wav_path)
+
+    # Fallback to edge_tts if voice cloning fails or was skipped
+    print(f"Warning: Falling back to edge_tts for scene {scene_index} (Language: {current_language})", file=sys.stderr)
+    await generate_tts_audio(output_path, text, style, scene_index, current_language)
 
 def clean_watermark(image_path):
     """Attempts to remove watermarks from an image with improved detection."""
@@ -531,18 +621,18 @@ def create_scene_video(image_path, audio_path, output_path, narration, scene_ind
     # === DYNAMIC KEN BURNS EFFECTS ===
     # 6 different motion patterns for variety
     motion_patterns = [
-        # Pattern 0: Slow zoom in from center
-        {"zoom": "min(zoom+0.0008,1.25)", "x": "iw/2-(iw/zoom/2)", "y": "ih/2-(ih/zoom/2)"},
-        # Pattern 1: Slow zoom out from center
-        {"zoom": "max(1.25-0.0008*on,1.0)", "x": "iw/2-(iw/zoom/2)", "y": "ih/2-(ih/zoom/2)"},
-        # Pattern 2: Pan left to right with slight zoom
-        {"zoom": "min(zoom+0.0003,1.15)", "x": "on/({})*iw/4".format(total_frames), "y": "ih/2-(ih/zoom/2)"},
-        # Pattern 3: Pan right to left with slight zoom
-        {"zoom": "min(zoom+0.0003,1.15)", "x": "iw/4-on/({})*iw/4".format(total_frames), "y": "ih/2-(ih/zoom/2)"},
-        # Pattern 4: Zoom in on upper third (good for faces)
-        {"zoom": "min(zoom+0.0006,1.2)", "x": "iw/2-(iw/zoom/2)", "y": "ih/4-(ih/zoom/2)"},
+        # Pattern 0: Fast zoom in from center
+        {"zoom": "min(zoom+0.0015,1.35)", "x": "iw/2-(iw/zoom/2)", "y": "ih/2-(ih/zoom/2)"},
+        # Pattern 1: Fast zoom out from center
+        {"zoom": "max(1.35-0.0015*on,1.0)", "x": "iw/2-(iw/zoom/2)", "y": "ih/2-(ih/zoom/2)"},
+        # Pattern 2: Pan left to right with zoom
+        {"zoom": "min(zoom+0.0008,1.20)", "x": "on/({})*iw/3".format(total_frames), "y": "ih/2-(ih/zoom/2)"},
+        # Pattern 3: Pan right to left with zoom
+        {"zoom": "min(zoom+0.0008,1.20)", "x": "iw/3-on/({})*iw/3".format(total_frames), "y": "ih/2-(ih/zoom/2)"},
+        # Pattern 4: Zoom in on upper third
+        {"zoom": "min(zoom+0.0012,1.3)", "x": "iw/2-(iw/zoom/2)", "y": "ih/4-(ih/zoom/2)"},
         # Pattern 5: Zoom in on lower third
-        {"zoom": "min(zoom+0.0006,1.2)", "x": "iw/2-(iw/zoom/2)", "y": "ih*3/4-(ih/zoom/2)"},
+        {"zoom": "min(zoom+0.0012,1.3)", "x": "iw/2-(iw/zoom/2)", "y": "ih*3/4-(ih/zoom/2)"},
     ]
 
     pattern = motion_patterns[scene_index % len(motion_patterns)]
@@ -554,13 +644,6 @@ def create_scene_video(image_path, audio_path, output_path, narration, scene_ind
     narration = re.sub(r'\s+', ' ', narration).strip()
     words = narration.split()
     total_words = len(words)
-
-    # Check for Devanagari (Hindi) text
-    def is_devanagari(text):
-        for char in text:
-            if '\u0900' <= char <= '\u097F':
-                return True
-        return False
 
     is_hindi = is_devanagari(narration)
 
@@ -851,6 +934,14 @@ async def main():
     aspect_ratio = data.get('aspect_ratio', '16:9')
     bg_music = data.get('background_music')
     language = data.get('language', 'en')
+
+    # Auto-detect language from content if it's default 'en'
+    if language == 'en' and scenes and is_devanagari(scenes[0]['narration']):
+        print(f"DEBUG: Hindi characters detected in narration. Switching language to 'hi'.", file=sys.stderr)
+        language = 'hi'
+
+    # Initialize appropriate models based on language
+    init_models(language)
 
     if not bg_music:
         # Fallback: Pick a random MP3 from public/audio/background/

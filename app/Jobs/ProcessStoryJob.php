@@ -85,7 +85,7 @@ class ProcessStoryJob implements ShouldQueue
             $visualPrefix = "science, technology, ";
         } elseif ($style === 'hollywood_hype') {
             $visualPrefix = "news, celebrity, ";
-        } elseif ($style === 'bollywood_masala') {
+        } elseif ($style === 'bollywood_masala' || $style === 'masala_news') {
             $visualPrefix = "indian cinema, bollywood, colorful, ";
         } elseif ($style === 'trade_wave') {
             $visualPrefix = "finance, business, ";
@@ -189,7 +189,7 @@ class ProcessStoryJob implements ShouldQueue
             'style' => $this->story->style ?? 'story',
             'scenes' => $scenes,
             'aspect_ratio' => $this->story->aspect_ratio ?? '16:9',
-            'language' => ($this->story->style === 'bollywood_masala') ? 'hi' : 'en',
+            'language' => (in_array($this->story->style, ['bollywood_masala', 'masala_news'])) ? 'hi' : 'en',
             'output_dir' => storage_path("app/public/videos/{$this->story->id}"),
         ];
 
