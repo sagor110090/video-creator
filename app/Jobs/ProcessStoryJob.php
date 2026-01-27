@@ -189,6 +189,7 @@ class ProcessStoryJob implements ShouldQueue
             'style' => $this->story->style ?? 'story',
             'scenes' => $scenes,
             'aspect_ratio' => $this->story->aspect_ratio ?? '16:9',
+            'language' => ($this->story->style === 'bollywood_masala') ? 'hi' : 'en',
             'output_dir' => storage_path("app/public/videos/{$this->story->id}"),
         ];
 

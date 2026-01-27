@@ -46,7 +46,7 @@ FFPROBE_PATH = get_executable_path('ffprobe', '/opt/homebrew/bin/ffprobe')
 LOGO_PATH = os.path.join(project_root, 'public', 'logo.png')
 
 # Target Voice Path for voice cloning
-TARGET_VOICE_PATH = os.path.join(project_root, 'public', 'audio', 'sample-1.mp3')
+TARGET_VOICE_PATH = os.path.join(project_root, 'public', 'audio', 'sample.m4a')
 
 # Initialize Chatterbox models
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -91,14 +91,15 @@ def extract_keywords(text, limit=6):
 
     return " ".join(unique_keywords[:limit])
 
-def download_web_image(query, output_path):
+def download_web_image(query, output_path, aspect_ratio='16:9'):
     """Downloads a high-quality, watermark-free image from the web with multiple fallbacks."""
 
     # 1. Try Pexels first if API key is available (Best for watermark-free images)
     pexels_key = os.getenv('PEXELS_API_KEY')
     if pexels_key:
         try:
-            url = f"https://api.pexels.com/v1/search?query={urllib.parse.quote(query)}&per_page=1&orientation=landscape"
+            orientation = 'landscape' if aspect_ratio == '16:9' else 'portrait'
+            url = f"https://api.pexels.com/v1/search?query={urllib.parse.quote(query)}&per_page=1&orientation={orientation}"
             headers = {"Authorization": pexels_key}
             response = requests.get(url, headers=headers, timeout=10)
             if response.status_code == 200:
@@ -177,7 +178,9 @@ def download_web_image(query, output_path):
         # 3. Final fallback: LoremFlickr (High quality, no watermarks, but random-ish)
         print("DEBUG: Using LoremFlickr fallback", file=sys.stderr)
         clean_q = urllib.parse.quote(query.split(',')[0].strip())
-        fallback_url = f"https://loremflickr.com/1920/1080/{clean_q}"
+        width = 1920 if aspect_ratio == '16:9' else 1080
+        height = 1080 if aspect_ratio == '16:9' else 1920
+        fallback_url = f"https://loremflickr.com/{width}/{height}/{clean_q}"
         fb_res = requests.get(fallback_url, timeout=10)
         if fb_res.status_code == 200:
             with open(output_path, 'wb') as f:
@@ -219,7 +222,7 @@ def process_text_for_naturalness(text):
 
     return text.strip()
 
-async def generate_tts_audio(output_path, text, style='story', scene_index=0):
+async def generate_tts_audio(output_path, text, style='story', scene_index=0, language='en'):
     """Generates 100% human-like audio using official parameters for natural cadence."""
     # Voice mapping
     voices = {
@@ -228,6 +231,17 @@ async def generate_tts_audio(output_path, text, style='story', scene_index=0):
         'trade_wave': 'en-GB-RyanNeural',
         'story': 'en-US-AndrewNeural'
     }
+
+    # Hindi voice mapping
+    if language.lower().startswith('hi'):
+        voices = {
+            'science_short': 'hi-IN-MadhurNeural',
+            'hollywood_hype': 'hi-IN-SwaraNeural',
+            'trade_wave': 'hi-IN-MadhurNeural',
+            'story': 'hi-IN-MadhurNeural',
+            'bollywood_masala': 'hi-IN-SwaraNeural'
+        }
+
     voice = voices.get(style, voices['story'])
 
     # Clean and enhance text punctuation for better flow
@@ -238,7 +252,8 @@ async def generate_tts_audio(output_path, text, style='story', scene_index=0):
         'science_short': {'rate': '-15%', 'pitch': '-1Hz'},
         'hollywood_hype': {'rate': '-5%', 'pitch': '+2Hz'},
         'trade_wave': {'rate': '-15%', 'pitch': '-2Hz'},
-        'story': {'rate': '-35%', 'pitch': '+1Hz'}
+        'story': {'rate': '-35%', 'pitch': '+1Hz'},
+        'bollywood_masala': {'rate': '-5%', 'pitch': '+2Hz'}
     }
     config = personalities.get(style, personalities['story'])
 
@@ -310,8 +325,15 @@ async def generate_tts_audio(output_path, text, style='story', scene_index=0):
     print(f"Warning: Falling back to silence.", file=sys.stderr)
     run_command([FFMPEG_PATH, '-y', '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo', '-t', '5', output_path])
 
-async def generate_cloned_voice(output_path, text, target_voice_path=None, scene_index=0):
+async def generate_cloned_voice(output_path, text, target_voice_path=None, scene_index=0, language='en', style='story'):
     """Generates audio using ChatterboxTTS and ChatterboxVC for voice cloning."""
+
+    # If language is Hindi, skip voice cloning (as Chatterbox might not support it well) and use Edge TTS directly
+    if language.lower().startswith('hi'):
+        print(f"DEBUG: Hindi language detected. Using Edge TTS for better quality.", file=sys.stderr)
+        await generate_tts_audio(output_path, text, style, scene_index, language)
+        return
+
     try:
         print(f"DEBUG: Generating cloned voice with target: {target_voice_path}", file=sys.stderr)
 
@@ -382,7 +404,7 @@ async def generate_cloned_voice(output_path, text, target_voice_path=None, scene
 
     # Fallback to edge_tts if voice cloning fails
     print(f"Warning: Falling back to edge_tts for scene {scene_index}", file=sys.stderr)
-    await generate_tts_audio(output_path, text, 'story', scene_index)
+    await generate_tts_audio(output_path, text, style, scene_index, language)
 
 def clean_watermark(image_path):
     """Attempts to remove watermarks from an image with improved detection."""
@@ -533,6 +555,15 @@ def create_scene_video(image_path, audio_path, output_path, narration, scene_ind
     words = narration.split()
     total_words = len(words)
 
+    # Check for Devanagari (Hindi) text
+    def is_devanagari(text):
+        for char in text:
+            if '\u0900' <= char <= '\u097F':
+                return True
+        return False
+
+    is_hindi = is_devanagari(narration)
+
     # Cross-platform font detection - prefer bold fonts
     possible_fonts = [
         "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
@@ -541,6 +572,17 @@ def create_scene_video(image_path, audio_path, output_path, narration, scene_ind
         "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
         "Arial",
     ]
+
+    # If Hindi, prioritize Hindi fonts
+    if is_hindi:
+        hindi_fonts = [
+             os.path.join(project_root, 'public', 'fonts', 'NotoSansDevanagari-Bold.ttf'),
+             "/System/Library/Fonts/Supplemental/DevanagariMT.ttc",
+             "/System/Library/Fonts/Kohinoor.ttc",
+             "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Bold.ttf",
+             "/usr/share/fonts/noto/NotoSansDevanagari-Bold.ttf",
+        ]
+        possible_fonts = hindi_fonts + possible_fonts
 
     font_path = "Arial"
     for path in possible_fonts:
@@ -808,6 +850,7 @@ async def main():
     style = data.get('style', 'story')
     aspect_ratio = data.get('aspect_ratio', '16:9')
     bg_music = data.get('background_music')
+    language = data.get('language', 'en')
 
     if not bg_music:
         # Fallback: Pick a random MP3 from public/audio/background/
@@ -839,16 +882,16 @@ async def main():
         # 2. Simplified Query (Keywords)
         # 3. Super Broad Query ("abstract background")
 
-        success = download_web_image(scene['image_prompt'], img_path)
+        success = download_web_image(scene['image_prompt'], img_path, aspect_ratio)
 
         if not success:
             print(f"DEBUG: Primary search failed for scene {i}. Retrying with simplified keywords...", file=sys.stderr)
             simple_query = extract_keywords(scene['image_prompt'], limit=3)
-            success = download_web_image(simple_query, img_path)
+            success = download_web_image(simple_query, img_path, aspect_ratio)
 
         if not success:
             print(f"DEBUG: Secondary search failed. Retrying with broad fallback...", file=sys.stderr)
-            success = download_web_image("cinematic background", img_path)
+            success = download_web_image("cinematic background", img_path, aspect_ratio)
 
         if not success:
             if last_successful_image and os.path.exists(last_successful_image):
@@ -879,7 +922,7 @@ async def main():
             clean_watermark(img_path)
             last_successful_image = img_path # Update success tracker
 
-        await generate_cloned_voice(aud_path, scene['narration'], TARGET_VOICE_PATH, i)
+        await generate_cloned_voice(aud_path, scene['narration'], TARGET_VOICE_PATH, i, language, style)
         create_scene_video(img_path, aud_path, vid_path, scene['narration'], i, aspect_ratio)
         if os.path.exists(vid_path): scene_videos.append(vid_path)
 

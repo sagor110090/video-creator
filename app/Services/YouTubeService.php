@@ -212,11 +212,13 @@ class YouTubeService
 
             $status = new VideoStatus();
 
-            if ($story->scheduled_for) {
-                $scheduledTime = new \DateTime($story->scheduled_for);
-                $status->setPublishAt($scheduledTime->format(\DateTime::ATOM));
-                $status->setPrivacyStatus('private'); // Scheduled videos must be private initially
-                Log::info("Scheduling video for: " . $scheduledTime->format(\DateTime::ATOM));
+            // Check if we should hold the video as private (future schedule) or publish now
+            // We do NOT use setPublishAt() as per requirements to avoid "Scheduled" state on YouTube
+            $isFutureSchedule = $story->scheduled_for && $story->scheduled_for->isFuture();
+
+            if ($isFutureSchedule) {
+                $status->setPrivacyStatus('private');
+                Log::info("Uploading scheduled video as private (skipping API publishAt).");
             } else {
                 $status->setPrivacyStatus('public');
             }
@@ -259,7 +261,7 @@ class YouTubeService
 
             $this->client->setDefer(false);
 
-            $uploadStatus = $story->scheduled_for ? 'scheduled' : 'completed';
+            $uploadStatus = $isFutureSchedule ? 'scheduled' : 'completed';
 
             $story->update([
                 'youtube_video_id' => $status['id'],
@@ -298,6 +300,44 @@ class YouTubeService
                 'youtube_error' => $finalError
             ]);
             throw $e;
+        }
+    }
+
+    public function publishScheduledVideo(Story $story)
+    {
+        try {
+            $token = $story->youtube_token_id
+                ? YoutubeToken::find($story->youtube_token_id)
+                : YoutubeToken::first();
+
+            if (!$token) {
+                throw new \Exception('No YouTube account connected.');
+            }
+
+            $this->refreshAccessTokenIfExpired($token);
+
+            $youtube = new YouTube($this->client);
+
+            $video = new Video();
+            $video->setId($story->youtube_video_id);
+
+            $status = new VideoStatus();
+            $status->setPrivacyStatus('public');
+            $video->setStatus($status);
+
+            $youtube->videos->update('status', $video);
+
+            $story->update([
+                'youtube_upload_status' => 'completed',
+            ]);
+
+            Log::info("Successfully published scheduled video for Story ID: {$story->id}");
+            return true;
+
+        } catch (\Exception $e) {
+            Log::error("Failed to publish scheduled video {$story->id}: " . $e->getMessage());
+            // We don't throw here to avoid stopping the loop in the command
+            return false;
         }
     }
 }

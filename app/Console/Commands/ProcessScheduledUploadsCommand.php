@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Story;
 use App\Jobs\UploadToYouTubeJob;
+use App\Services\YouTubeService;
 use Illuminate\Console\Command;
 
 class ProcessScheduledUploadsCommand extends Command
@@ -25,32 +26,48 @@ class ProcessScheduledUploadsCommand extends Command
     /**
      * Execute the console command.
      */
-    public function handle()
+    public function handle(YouTubeService $youtubeService)
     {
         $this->info('Checking for scheduled uploads...');
 
-        $stories = Story::where('status', 'completed')
+        // 1. Upload videos that are due but not yet uploaded
+        $storiesToUpload = Story::where('status', 'completed')
             ->whereNotNull('scheduled_for')
             ->where('scheduled_for', '<=', now())
             ->where('is_uploaded_to_youtube', false)
             ->whereNull('youtube_upload_status') // Only pick up if not already uploading/uploaded/failed
             ->get();
 
-        if ($stories->isEmpty()) {
-            $this->info('No scheduled uploads found.');
-            return;
+        if ($storiesToUpload->isNotEmpty()) {
+            foreach ($storiesToUpload as $story) {
+                $this->info("Dispatching upload for story ID: {$story->id} - {$story->title}");
+                
+                // Mark as uploading so it doesn't get picked up again immediately
+                $story->update(['youtube_upload_status' => 'uploading']);
+                
+                UploadToYouTubeJob::dispatch($story);
+            }
+            $this->info("Dispatched {$storiesToUpload->count()} stories for upload.");
+        } else {
+            $this->info('No pending uploads found.');
         }
 
-        foreach ($stories as $story) {
-            $this->info("Dispatching upload for story ID: {$story->id} - {$story->title}");
-            
-            // Mark as uploading so it doesn't get picked up again immediately if job is slow to start
-            // The job will update this status as well
-            $story->update(['youtube_upload_status' => 'uploading']);
-            
-            UploadToYouTubeJob::dispatch($story);
-        }
+        // 2. Publish videos that are uploaded (private) and now due
+        $this->info('Checking for videos to publish...');
+        
+        $storiesToPublish = Story::where('is_uploaded_to_youtube', true)
+            ->where('youtube_upload_status', 'scheduled')
+            ->where('scheduled_for', '<=', now())
+            ->get();
 
-        $this->info("Dispatched {$stories->count()} stories for upload.");
+        if ($storiesToPublish->isNotEmpty()) {
+            foreach ($storiesToPublish as $story) {
+                $this->info("Publishing story ID: {$story->id} - {$story->title}");
+                $youtubeService->publishScheduledVideo($story);
+            }
+            $this->info("Published {$storiesToPublish->count()} stories.");
+        } else {
+            $this->info('No videos to publish found.');
+        }
     }
 }
