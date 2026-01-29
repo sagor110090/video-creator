@@ -47,7 +47,7 @@ FFPROBE_PATH = get_executable_path('ffprobe', '/opt/homebrew/bin/ffprobe')
 LOGO_PATH = os.path.join(project_root, 'public', 'logo.png')
 
 # Target Voice Path for voice cloning
-TARGET_VOICE_PATH = os.path.join(project_root, 'public', 'audio', 'sample.m4a')
+TARGET_VOICE_PATH = os.path.join(project_root, 'public', 'audio', 'sample-1.mp3')
 
 # Initialize Chatterbox models
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
