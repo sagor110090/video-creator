@@ -99,19 +99,11 @@ const navigation = [
             </nav>
 
             <!-- Bottom Section -->
-            <div class="p-6 mt-auto">
-                <div class="rounded-2xl p-5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-sm">
-                    <p class="text-slate-900 dark:text-white font-bold text-sm mb-1">Upgrade Plan</p>
-                    <p class="text-slate-500 dark:text-slate-400 text-xs mb-3">Unlock pro AI features</p>
-                    <button class="w-full py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl text-xs font-black hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors shadow-sm">
-                        Go Premium
-                    </button>
-                </div>
-            </div>
+            <!-- Removed Upgrade Plan -->
         </aside>
 
         <!-- Main Content Area -->
-            <div class="flex-1 flex flex-col overflow-hidden w-full relative">
+        <div class="flex-1 flex flex-col overflow-hidden w-full relative">
             <!-- Top Bar -->
             <header class="h-20 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-8 z-30 drag-region">
                 <div class="flex items-center">
@@ -125,22 +117,10 @@ const navigation = [
                         <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
                             <slot name="header"></slot>
                         </h1>
-                        <p class="text-xs text-slate-400 dark:text-slate-500 font-medium">Welcome back, {{ $page.props.auth?.user?.name || 'Guest' }}</p>
                     </div>
                 </div>
                 <div class="flex items-center space-x-6 no-drag">
                     <slot name="actions"></slot>
-
-                    <!-- User Profile -->
-                    <div class="flex items-center space-x-3 pl-6 border-l border-slate-200 dark:border-slate-800">
-                        <div class="hidden sm:block text-right">
-                            <p class="text-sm font-bold text-slate-900 dark:text-white leading-none">{{ $page.props.auth?.user?.name || 'Guest' }}</p>
-                            <p class="text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-1">Free Tier</p>
-                        </div>
-                        <div class="w-10 h-10 rounded-2xl bg-slate-900 dark:bg-white flex items-center justify-center text-white dark:text-slate-900 font-black shadow-sm ring-1 ring-slate-200 dark:ring-slate-800">
-                            {{ ($page.props.auth?.user?.name || 'G').charAt(0) }}
-                        </div>
-                    </div>
                 </div>
             </header>
 

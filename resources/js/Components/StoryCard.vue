@@ -8,7 +8,7 @@ const props = defineProps({
     }
 });
 
-const emit = defineEmits(['regenerate', 'delete', 'upload', 'schedule']);
+const emit = defineEmits(['regenerate', 'delete', 'upload', 'schedule', 'edit-scenes']);
 const videoLoaded = ref(false);
 const isVisible = ref(false);
 const cardRef = ref(null);
@@ -184,7 +184,7 @@ const formatScheduledDate = (dateString) => {
                        playsinline
                        class="w-full h-full object-contain"
                        :class="story.aspect_ratio === '9:16' ? 'max-w-[180px] mx-auto' : ''">
-                    <source :src="'/storage/' + story.video_path" type="video/mp4">
+                    <source :src="'/storage/' + story.video_path + '?t=' + new Date(story.updated_at).getTime()" type="video/mp4">
                 </video>
 
                 <div v-if="videoError" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-800">
@@ -217,6 +217,12 @@ const formatScheduledDate = (dateString) => {
 
             <!-- Actions Badge -->
             <div class="absolute top-4 right-4 flex space-x-2">
+                <button v-if="story.status === 'completed' || story.status === 'failed'"
+                        @click="emit('edit-scenes', story)"
+                        class="p-2 bg-white/10 hover:bg-indigo-500 text-white rounded-lg backdrop-blur-md transition-all"
+                        title="Edit Scenes">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                </button>
                 <button v-if="story.status === 'completed' || story.status === 'failed'"
                         @click="emit('regenerate', story)"
                         class="p-2 bg-white/10 hover:bg-indigo-500 text-white rounded-lg backdrop-blur-md transition-all group/btn"

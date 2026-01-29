@@ -20,26 +20,30 @@ class ProcessStoryJob implements ShouldQueue
 
     public $timeout = 3600;
 
-    public function __construct(public Story $story) {}
+    public function __construct(public Story $story, public bool $skipParsing = false) {}
 
     public function handle(): void
     {
         try {
             $this->story->update(['status' => 'processing']);
 
-            // STEP 1: Story Parser (Storyboard Creation)
-            Log::info("STEP 1: Parsing story into storyboard for Story ID: {$this->story->id}");
-            $storyboard = $this->parseStory($this->story->content);
+            if (!$this->skipParsing) {
+                // STEP 1: Story Parser (Storyboard Creation)
+                Log::info("STEP 1: Parsing story into storyboard for Story ID: {$this->story->id}");
+                $storyboard = $this->parseStory($this->story->content);
 
-            // Clear existing scenes if any (idempotency)
-            $this->story->scenes()->delete();
+                // Clear existing scenes if any (idempotency)
+                $this->story->scenes()->delete();
 
-            foreach ($storyboard as $index => $scene) {
-                $this->story->scenes()->create([
-                    'order' => $index,
-                    'narration' => $scene['narration'],
-                    'image_prompt' => $scene['image_prompt'],
-                ]);
+                foreach ($storyboard as $index => $scene) {
+                    $this->story->scenes()->create([
+                        'order' => $index,
+                        'narration' => $scene['narration'],
+                        'image_prompt' => $scene['image_prompt'],
+                    ]);
+                }
+            } else {
+                Log::info("Skipping STEP 1 (Parsing) for Story ID: {$this->story->id} (Regeneration Mode)");
             }
 
             // STEPS 2, 3, & 4: Voice, Video, and Assembly (via Python Worker)

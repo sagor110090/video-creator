@@ -967,55 +967,76 @@ async def main():
         aud_path = os.path.join(output_dir, f"scene_{i}_aud.mp3")
         vid_path = os.path.join(output_dir, f"scene_{i}_vid.mp4")
 
-        # Try to download image from web
-        # Retry Logic:
-        # 1. Full Query
-        # 2. Simplified Query (Keywords)
-        # 3. Super Broad Query ("abstract background")
+        # === SMART SKIPPING: If files exist, reuse them ===
+        # This allows partial regeneration by deleting specific files before calling worker
 
-        success = download_web_image(scene['image_prompt'], img_path, aspect_ratio)
-
-        if not success:
-            print(f"DEBUG: Primary search failed for scene {i}. Retrying with simplified keywords...", file=sys.stderr)
-            simple_query = extract_keywords(scene['image_prompt'], limit=3)
-            success = download_web_image(simple_query, img_path, aspect_ratio)
-
-        if not success:
-            print(f"DEBUG: Secondary search failed. Retrying with broad fallback...", file=sys.stderr)
-            success = download_web_image("cinematic background", img_path, aspect_ratio)
-
-        if not success:
-            if last_successful_image and os.path.exists(last_successful_image):
-                 # Fallback: Use previous scene's image ("like scene 1")
-                 print(f"DEBUG: All searches failed. reusing previous image for scene {i}", file=sys.stderr)
-                 shutil.copy(last_successful_image, img_path)
-                 success = True
-            else:
-                # Final Fallback: Generate a random placeholder image from Picsum
-                print(f"DEBUG: Falling back to Picsum image for scene {i}", file=sys.stderr)
-                width = 1920 if aspect_ratio == "16:9" else 1080
-                height = 1080 if aspect_ratio == "16:9" else 1920
-
-                try:
-                    url = f"https://picsum.photos/{width}/{height}?sig={int(time.time())}"
-                    headers = {'User-Agent': 'Mozilla/5.0'}
-                    req = urllib.request.Request(url, headers=headers)
-                    with urllib.request.urlopen(req, timeout=10) as response:
-                        with open(img_path, 'wb') as f:
-                            f.write(response.read())
-                    success = True
-                except Exception as e:
-                    print(f"DEBUG: Picsum fallback failed: {e}. Using black image.", file=sys.stderr)
-                    dimensions = f"{width}x{height}"
-                    run_command([FFMPEG_PATH, '-y', '-f', 'lavfi', '-i', f'color=c=black:s={dimensions}', '-frames:v', '1', img_path])
+        # 1. Image Generation
+        if os.path.exists(img_path) and os.path.getsize(img_path) > 0:
+            print(f"DEBUG: Image for scene {i} exists, skipping download.", file=sys.stderr)
+            last_successful_image = img_path
         else:
-            # Clean the downloaded image from watermarks before using it
-            clean_watermark(img_path)
-            last_successful_image = img_path # Update success tracker
+            # Try to download image from web
+            # Retry Logic:
+            # 1. Full Query
+            # 2. Simplified Query (Keywords)
+            # 3. Super Broad Query ("abstract background")
 
-        await generate_cloned_voice(aud_path, scene['narration'], TARGET_VOICE_PATH, i, language, style)
-        create_scene_video(img_path, aud_path, vid_path, scene['narration'], i, aspect_ratio)
-        if os.path.exists(vid_path): scene_videos.append(vid_path)
+            success = download_web_image(scene['image_prompt'], img_path, aspect_ratio)
+
+            if not success:
+                print(f"DEBUG: Primary search failed for scene {i}. Retrying with simplified keywords...", file=sys.stderr)
+                simple_query = extract_keywords(scene['image_prompt'], limit=3)
+                success = download_web_image(simple_query, img_path, aspect_ratio)
+
+            if not success:
+                print(f"DEBUG: Secondary search failed. Retrying with broad fallback...", file=sys.stderr)
+                success = download_web_image("cinematic background", img_path, aspect_ratio)
+
+            if not success:
+                if last_successful_image and os.path.exists(last_successful_image):
+                     # Fallback: Use previous scene's image ("like scene 1")
+                     print(f"DEBUG: All searches failed. reusing previous image for scene {i}", file=sys.stderr)
+                     shutil.copy(last_successful_image, img_path)
+                     success = True
+                else:
+                    # Final Fallback: Generate a random placeholder image from Picsum
+                    print(f"DEBUG: Falling back to Picsum image for scene {i}", file=sys.stderr)
+                    width = 1920 if aspect_ratio == "16:9" else 1080
+                    height = 1080 if aspect_ratio == "16:9" else 1920
+
+                    try:
+                        url = f"https://picsum.photos/{width}/{height}?sig={int(time.time())}"
+                        headers = {'User-Agent': 'Mozilla/5.0'}
+                        req = urllib.request.Request(url, headers=headers)
+                        with urllib.request.urlopen(req, timeout=10) as response:
+                            with open(img_path, 'wb') as f:
+                                f.write(response.read())
+                        success = True
+                    except Exception as e:
+                        print(f"DEBUG: Picsum fallback failed: {e}. Using black image.", file=sys.stderr)
+                        dimensions = f"{width}x{height}"
+                        run_command([FFMPEG_PATH, '-y', '-f', 'lavfi', '-i', f'color=c=black:s={dimensions}', '-frames:v', '1', img_path])
+            else:
+                # Clean the downloaded image from watermarks before using it
+                clean_watermark(img_path)
+                last_successful_image = img_path # Update success tracker
+
+        # 2. Audio Generation
+        if os.path.exists(aud_path) and os.path.getsize(aud_path) > 0:
+             print(f"DEBUG: Audio for scene {i} exists, skipping generation.", file=sys.stderr)
+        else:
+            await generate_cloned_voice(aud_path, scene['narration'], TARGET_VOICE_PATH, i, language, style)
+
+        # 3. Video Segment Generation
+        # We only skip if video exists AND inputs (img/aud) are older than video?
+        # For simplicity, if vid_path exists, we assume it's up to date.
+        # The controller must delete vid_path if img/aud were regenerated.
+        if os.path.exists(vid_path) and os.path.getsize(vid_path) > 0:
+            print(f"DEBUG: Video segment for scene {i} exists, skipping render.", file=sys.stderr)
+            scene_videos.append(vid_path)
+        else:
+            create_scene_video(img_path, aud_path, vid_path, scene['narration'], i, aspect_ratio)
+            if os.path.exists(vid_path): scene_videos.append(vid_path)
 
     if scene_videos:
         final_video = step4_automatic_assembly(output_dir, scene_videos, bg_music, aspect_ratio)

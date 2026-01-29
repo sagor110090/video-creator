@@ -15,6 +15,8 @@ Route::get('/stories/{story}', [StoryController::class, 'show']);
 Route::get('/stories', [StoryController::class, 'index']);
 Route::delete('/stories/{story}', [StoryController::class, 'destroy']);
 Route::post('/stories/{story}/regenerate', [StoryController::class, 'regenerate']);
+Route::patch('/scenes/{scene}', [StoryController::class, 'updateScene']);
+Route::post('/scenes/{scene}/regenerate', [StoryController::class, 'regenerateScene']);
 
 Route::get('/schedules', [\App\Http\Controllers\VideoScheduleController::class, 'index']);
 Route::post('/schedules', [\App\Http\Controllers\VideoScheduleController::class, 'store']);

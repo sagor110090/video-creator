@@ -8,6 +8,7 @@ use App\Jobs\UploadToYouTubeJob;
 use App\Services\AiStoryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class StoryController extends Controller
 {
@@ -97,6 +98,55 @@ class StoryController extends Controller
         ]));
 
         return response()->json($story->load('youtubeChannel'));
+    }
+
+    public function updateScene(Request $request, \App\Models\Scene $scene)
+    {
+        $request->validate([
+            'narration' => 'nullable|string',
+            'image_prompt' => 'nullable|string',
+        ]);
+
+        $scene->update($request->only(['narration', 'image_prompt']));
+
+        return response()->json(['message' => 'Scene updated successfully', 'scene' => $scene]);
+    }
+
+    public function regenerateScene(Request $request, \App\Models\Scene $scene)
+    {
+        Log::info("Regenerating Scene ID: {$scene->id}", $request->all());
+
+        $request->validate([
+            'narration' => 'nullable|string',
+            'image_prompt' => 'nullable|string',
+        ]);
+
+        if ($request->has('narration') || $request->has('image_prompt')) {
+            $updated = $scene->update($request->only(['narration', 'image_prompt']));
+            Log::info("Scene ID: {$scene->id} updated before regeneration. Success: " . ($updated ? 'Yes' : 'No'));
+        }
+
+        $story = $scene->story;
+
+        // Delete generated files for this scene
+        $filesToDelete = [
+            "videos/{$story->id}/scene_{$scene->order}_img.jpg",
+            "videos/{$story->id}/scene_{$scene->order}_aud.mp3",
+            "videos/{$story->id}/scene_{$scene->order}_vid.mp4",
+            // Also delete final video to force re-assembly
+            "videos/{$story->id}/final_video.mp4"
+        ];
+
+        foreach ($filesToDelete as $file) {
+            if (Storage::disk('public')->exists($file)) {
+                Storage::disk('public')->delete($file);
+            }
+        }
+
+        // Dispatch job skipping the parsing step
+        ProcessStoryJob::dispatch($story, true); // true = skip parsing
+
+        return response()->json(['message' => 'Scene regeneration started', 'story' => $story]);
     }
 
     public function uploadToYouTube(Story $story)
