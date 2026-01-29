@@ -19,7 +19,6 @@ const form = ref({
 
 const timezone = ref(Intl.DateTimeFormat().resolvedOptions().timeZone);
 
-// Quick schedule options
 const quickScheduleOptions = [
     { label: 'Tomorrow 9:00 AM', value: () => {
         const date = new Date();
@@ -57,7 +56,6 @@ const quickScheduleOptions = [
     }}
 ];
 
-// Format date to local datetime-local string (YYYY-MM-DDTHH:mm)
 const toLocalISOString = (date) => {
     const pad = (num) => (num < 10 ? '0' + num : num);
     const year = date.getFullYear();
@@ -68,7 +66,6 @@ const toLocalISOString = (date) => {
     return `${year}-${month}-${day}T${hours}:${minutes}`;
 };
 
-// Format date for display
 const formatDisplayDate = (dateString) => {
     if (!dateString) return 'Not scheduled';
     const date = new Date(dateString);
@@ -93,7 +90,6 @@ watch(() => props.story, (newStory) => {
             youtube_token_id: newStory.youtube_token_id || (props.channels.length > 0 ? props.channels[0].id : null)
         };
 
-        // If no scheduled time, set default to tomorrow 9 AM
         if (!form.value.scheduled_for) {
              const tomorrow = new Date();
              tomorrow.setDate(tomorrow.getDate() + 1);
@@ -117,23 +113,23 @@ const selectQuickSchedule = (option) => {
         <div v-if="show" class="fixed inset-0 z-[100] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
             <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
                 <!-- Background overlay -->
-                <div @click="emit('close')" class="fixed inset-0 bg-slate-900/75 backdrop-blur-sm transition-opacity" aria-hidden="true"></div>
+                <div @click="emit('close')" class="fixed inset-0 bg-[#0a0a0a]/90 backdrop-blur-md transition-opacity" aria-hidden="true"></div>
 
-                <!-- This element is to trick the browser into centering the modal contents. -->
+                <!-- This element is to trick browser into centering modal contents. -->
                 <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
 
-                <div class="relative inline-block align-bottom bg-white dark:bg-slate-900 rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full">
-                    <div class="bg-white dark:bg-slate-900 px-6 py-6">
-                        <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-6">Schedule Upload</h3>
+                <div class="relative inline-block align-bottom bg-[#1a1a1a] rounded-sm text-left overflow-hidden shadow-[0_0_50px_rgba(255,170,0,0.2)] transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full border border-[#222222] neon-glow-amber">
+                    <div class="bg-[#1a1a1a] px-5 py-5">
+                        <h3 class="text-lg font-bold text-white mb-4 font-cyber">Schedule Upload</h3>
 
-                        <div class="space-y-5">
+                        <div class="space-y-4">
                             <!-- Quick Schedule Options -->
                             <div>
-                                <label class="block text-slate-700 dark:text-slate-300 text-sm font-semibold mb-3">Quick Schedule</label>
+                                <label class="block text-[#a0a0a0] text-xs font-semibold mb-2">Quick Schedule</label>
                                 <div class="grid grid-cols-2 gap-2">
                                     <button v-for="(option, index) in quickScheduleOptions" :key="index"
                                             @click="selectQuickSchedule(option)"
-                                            class="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-amber-100 dark:hover:bg-amber-900/30 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-amber-700 dark:hover:text-amber-400 transition-all text-left">
+                                            class="px-2.5 py-2 bg-[#222222] hover:bg-[#ffaa00]/20 border border-[#333333] hover:border-[#ffaa00]/50 text-[10px] font-medium text-white hover:text-[#ffaa00] transition-all text-left rounded-sm font-terminal">
                                         {{ option.label }}
                                     </button>
                                 </div>
@@ -141,19 +137,19 @@ const selectQuickSchedule = (option) => {
 
                             <!-- Scheduled Time -->
                             <div>
-                                <label class="block text-slate-700 dark:text-slate-300 text-sm font-semibold mb-2">Date & Time</label>
+                                <label class="block text-[#a0a0a0] text-xs font-semibold mb-2">Date & Time</label>
                                 <div class="relative">
                                     <input v-model="form.scheduled_for" type="datetime-local"
-                                           class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all text-sm text-slate-900 dark:text-white">
+                                           class="w-full px-3.5 py-2.5 bg-[#222222] border border-[#333333] rounded-sm focus:border-[#ffaa00] focus:neon-glow-amber outline-none text-xs text-white">
                                     <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                                        <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg class="w-4 h-4 text-[#666666]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                                         </svg>
                                     </div>
                                 </div>
-                                <div class="flex items-center justify-between mt-2">
-                                    <p class="text-xs text-slate-500">{{ timezone }}</p>
-                                    <p v-if="form.scheduled_for" class="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                                <div class="flex items-center justify-between mt-1.5">
+                                    <p class="text-[10px] text-[#666666] font-terminal">{{ timezone }}</p>
+                                    <p v-if="form.scheduled_for" class="text-[10px] text-[#ffaa00] font-medium font-cyber">
                                         {{ formatDisplayDate(form.scheduled_for) }}
                                     </p>
                                 </div>
@@ -161,9 +157,9 @@ const selectQuickSchedule = (option) => {
 
                             <!-- Channel Selection -->
                             <div>
-                                <label class="block text-slate-700 dark:text-slate-300 text-sm font-semibold mb-2">YouTube Channel</label>
+                                <label class="block text-[#a0a0a0] text-xs font-semibold mb-2">YouTube Channel</label>
                                 <select v-model="form.youtube_token_id"
-                                        class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all text-sm text-slate-900 dark:text-white">
+                                        class="w-full px-3.5 py-2.5 bg-[#222222] border border-[#333333] rounded-sm focus:border-[#ffaa00] focus:neon-glow-amber outline-none text-xs text-white">
                                     <option v-for="channel in channels" :key="channel.id" :value="channel.id">
                                         {{ channel.channel_title }}
                                     </option>
@@ -172,21 +168,21 @@ const selectQuickSchedule = (option) => {
 
                             <!-- Title -->
                             <div>
-                                <label class="block text-slate-700 dark:text-slate-300 text-sm font-semibold mb-2">Video Title</label>
+                                <label class="block text-[#a0a0a0] text-xs font-semibold mb-2">Video Title</label>
                                 <input v-model="form.youtube_title" type="text"
-                                       class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all text-sm text-slate-900 dark:text-white"
+                                       class="w-full px-3.5 py-2.5 bg-[#222222] border border-[#333333] rounded-sm focus:border-[#ffaa00] focus:neon-glow-amber outline-none text-xs text-white"
                                        placeholder="Enter video title...">
                             </div>
                         </div>
                     </div>
 
-                    <div class="bg-slate-50 dark:bg-slate-800/50 px-6 py-4 flex flex-row-reverse space-x-3 space-x-reverse">
+                    <div class="bg-[#0a0a0a]/80 px-5 py-4 flex flex-row-reverse space-x-2 space-x-reverse border-t border-[#222222]">
                         <button @click="confirm"
-                                class="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-amber-100 dark:shadow-none flex items-center justify-center space-x-2">
+                                class="cyber-btn flex-1 py-2.5 font-bold flex items-center justify-center space-x-1.5">
                             <span>Schedule</span>
                         </button>
                         <button @click="emit('close')"
-                                class="flex-1 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold py-3 px-6 rounded-xl border border-slate-200 dark:border-slate-700 transition-all">
+                                class="flex-1 bg-[#1a1a1a] hover:bg-[#222222] text-white font-bold py-2.5 px-6 border border-[#333333] hover:border-[#ffaa00]/50 rounded-sm transition-all">
                             Cancel
                         </button>
                     </div>

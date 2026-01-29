@@ -69,9 +69,9 @@ const createSchedule = async () => {
             icon: 'error',
             title: 'Oops...',
             text: error.response?.data?.message || 'Failed to create schedule',
-            confirmButtonColor: '#0b1021',
-            background: isDark.value ? '#0f172a' : '#ffffff',
-            color: isDark.value ? '#f8fafc' : '#0f172a'
+            confirmButtonColor: '#00f0ff',
+            background: '#111111',
+            color: '#ffffff'
         });
     } finally {
         creating.value = false;
@@ -104,9 +104,9 @@ const updateSchedule = async () => {
             icon: 'error',
             title: 'Oops...',
             text: error.response?.data?.message || 'Failed to update schedule',
-            confirmButtonColor: '#0b1021',
-            background: isDark.value ? '#0f172a' : '#ffffff',
-            color: isDark.value ? '#f8fafc' : '#0f172a'
+            confirmButtonColor: '#00f0ff',
+            background: '#111111',
+            color: '#ffffff'
         });
     } finally {
         updating.value = false;
@@ -130,11 +130,11 @@ const deleteSchedule = async (id) => {
         text: "Are you sure you want to delete this schedule?",
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonColor: '#b9382a',
-        cancelButtonColor: '#64748b',
+        confirmButtonColor: '#ff00ff',
+        cancelButtonColor: '#333333',
         confirmButtonText: 'Yes, delete it!',
-        background: isDark.value ? '#0f172a' : '#ffffff',
-        color: isDark.value ? '#f8fafc' : '#0f172a'
+        background: '#111111',
+        color: '#ffffff'
     });
 
     if (!result.isConfirmed) return;
@@ -148,20 +148,20 @@ const deleteSchedule = async (id) => {
             icon: 'error',
             title: 'Error',
             text: 'Failed to delete schedule',
-            confirmButtonColor: '#0b1021',
-            background: isDark.value ? '#0f172a' : '#ffffff',
-            color: isDark.value ? '#f8fafc' : '#0f172a'
+            confirmButtonColor: '#00f0ff',
+            background: '#111111',
+            color: '#ffffff'
         });
     }
 };
 
 const getStatusColor = (status) => {
     switch (status) {
-        case 'pending': return 'bg-[#f2ebe0] text-[#6a5d4d] dark:bg-slate-800 dark:text-slate-300';
-        case 'processing': return 'bg-[#e3f5f4] text-[#2f6c73] dark:bg-slate-800 dark:text-slate-200';
-        case 'completed': return 'bg-[#e8f4dc] text-[#3d5b2f] dark:bg-slate-800 dark:text-slate-200';
-        case 'failed': return 'bg-[#fde7dd] text-[#b9382a] dark:bg-slate-800 dark:text-slate-200';
-        default: return 'bg-[#f2ebe0] text-[#6a5d4d] dark:bg-slate-800 dark:text-slate-300';
+        case 'pending': return 'bg-[#1a1a1a] text-[#666666] border border-[#333333]';
+        case 'processing': return 'bg-[#1a1a1a] text-[#00f0ff] border border-[#00f0ff]/30';
+        case 'completed': return 'bg-[#1a1a1a] text-[#00ff41] border border-[#00ff41]/30';
+        case 'failed': return 'bg-[#1a1a1a] text-[#ff00ff] border border-[#ff00ff]/30';
+        default: return 'bg-[#1a1a1a] text-[#666666] border border-[#333333]';
     }
 };
 
@@ -172,7 +172,6 @@ const formatDate = (dateString) => {
 
 const formatTime = (timeString) => {
     if (!timeString) return '--:--';
-    // Remove seconds if present
     return timeString.substring(0, 5);
 };
 
@@ -190,20 +189,20 @@ onMounted(() => {
         <template #header>Video Schedules</template>
 
         <div class="space-y-8">
-            <div class="relative overflow-hidden rounded-[32px] border border-[#e6dccf] dark:border-slate-800 bg-[#f7f2e8] dark:bg-slate-900/70 px-8 py-10 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.4)]">
-                <div class="absolute inset-0 bg-gradient-to-br from-[#fff7ee] via-transparent to-transparent dark:from-slate-900/60"></div>
-                <div class="relative flex flex-col gap-4">
-                    <p class="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#6a5d4d] dark:text-slate-400">Schedule Studio</p>
-                    <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+            <div class="relative overflow-hidden rounded-sm border border-[#222222] bg-[#111111] px-6 py-8 shadow-[0_0_30px_rgba(0,240,255,0.05)] holographic">
+                <div class="absolute inset-0 bg-gradient-to-br from-[#00f0ff]/5 via-transparent to-transparent"></div>
+                <div class="relative flex flex-col gap-3">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#00f0ff] font-terminal">Schedule Studio</p>
+                    <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5">
                         <div>
-                            <h2 class="text-3xl font-black text-[#15131a] dark:text-white">Video Schedules</h2>
-                            <p class="text-sm text-[#6a5d4d] dark:text-slate-400 mt-2 max-w-2xl">Orchestrate daily publishing with precision, clarity, and a touch of ritual.</p>
+                            <h2 class="text-3xl font-black text-white font-cyber">Video Schedules</h2>
+                            <p class="text-sm text-[#666666] mt-2 max-w-2xl">Orchestrate daily publishing with precision, clarity, and a touch of ritual.</p>
                         </div>
                         <div class="flex flex-wrap gap-3">
-                            <div class="rounded-full border border-[#e6dccf] dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 px-4 py-2 text-xs font-semibold text-[#6a5d4d] dark:text-slate-300">
+                            <div class="rounded-sm border border-[#222222] bg-[#1a1a1a] px-4 py-2 text-xs font-semibold text-[#666666]">
                                 {{ schedules.data.length }} Active
                             </div>
-                            <div class="rounded-full border border-[#e6dccf] dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 px-4 py-2 text-xs font-semibold text-[#6a5d4d] dark:text-slate-300">
+                            <div class="rounded-sm border border-[#222222] bg-[#1a1a1a] px-4 py-2 text-xs font-semibold text-[#666666]">
                                 {{ channels.length }} Channels
                             </div>
                         </div>
@@ -211,35 +210,35 @@ onMounted(() => {
                 </div>
             </div>
 
-            <div class="bg-white dark:bg-slate-900 rounded-[28px] shadow-[0_30px_60px_-40px_rgba(15,23,42,0.35)] border border-[#e6dccf] dark:border-slate-800 p-8">
-                <h3 class="text-lg font-black text-[#15131a] dark:text-white mb-6">Create New Schedule</h3>
-                <form @submit.prevent="createSchedule" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div class="bg-[#1a1a1a] rounded-sm shadow-[0_0_30px_rgba(0,240,255,0.08)] border border-[#222222] p-6">
+                <h3 class="text-base font-black text-white mb-5 font-cyber">Create New Schedule</h3>
+                <form @submit.prevent="createSchedule" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div class="space-y-2">
-                        <label class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#6a5d4d] dark:text-slate-400">Topic</label>
+                        <label class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#00f0ff] font-terminal">Topic</label>
                         <input
                             v-model="newSchedule.topic"
                             type="text"
                             placeholder="e.g. History of Rome"
                             required
-                            class="w-full px-4 py-3 bg-[#fbf7f1] dark:bg-slate-800 border border-[#efe6d8] dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-[#c7a36c]/40 focus:border-[#c7a36c] outline-none transition-all dark:text-white"
+                            class="w-full px-4 py-2.5 bg-[#222222] border border-[#333333] rounded-sm focus:border-[#00f0ff] focus:neon-glow-cyan outline-none transition-all text-white"
                         />
                     </div>
 
                     <div class="space-y-2">
-                        <label class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#6a5d4d] dark:text-slate-400">Daily Time</label>
+                        <label class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#00f0ff] font-terminal">Daily Time</label>
                         <input
                             v-model="newSchedule.scheduled_time"
                             type="time"
                             required
-                            class="w-full px-4 py-3 bg-[#fbf7f1] dark:bg-slate-800 border border-[#efe6d8] dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-[#c7a36c]/40 focus:border-[#c7a36c] outline-none transition-all dark:text-white"
+                            class="w-full px-4 py-2.5 bg-[#222222] border border-[#333333] rounded-sm focus:border-[#00f0ff] focus:neon-glow-cyan outline-none transition-all text-white"
                         />
                     </div>
 
                     <div class="space-y-2">
-                        <label class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#6a5d4d] dark:text-slate-400">YouTube Channel</label>
+                        <label class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#00f0ff] font-terminal">YouTube Channel</label>
                         <select
                             v-model="newSchedule.youtube_token_id"
-                            class="w-full px-4 py-3 bg-[#fbf7f1] dark:bg-slate-800 border border-[#efe6d8] dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-[#c7a36c]/40 focus:border-[#c7a36c] outline-none transition-all dark:text-white"
+                            class="w-full px-4 py-2.5 bg-[#222222] border border-[#333333] rounded-sm focus:border-[#00f0ff] focus:neon-glow-cyan outline-none transition-all text-white"
                         >
                             <option v-for="channel in channels" :key="channel.id" :value="channel.id">
                                 {{ channel.channel_title }}
@@ -248,10 +247,10 @@ onMounted(() => {
                     </div>
 
                     <div class="space-y-2">
-                        <label class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#6a5d4d] dark:text-slate-400">Content Style</label>
+                        <label class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#00f0ff] font-terminal">Content Style</label>
                         <select
                             v-model="newSchedule.style"
-                            class="w-full px-4 py-3 bg-[#fbf7f1] dark:bg-slate-800 border border-[#efe6d8] dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-[#c7a36c]/40 focus:border-[#c7a36c] outline-none transition-all dark:text-white"
+                            class="w-full px-4 py-2.5 bg-[#222222] border border-[#333333] rounded-sm focus:border-[#00f0ff] focus:neon-glow-cyan outline-none transition-all text-white"
                         >
                             <option value="story">Story</option>
                             <option value="science_short">Science Short</option>
@@ -262,10 +261,10 @@ onMounted(() => {
                     </div>
 
                     <div class="space-y-2">
-                        <label class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#6a5d4d] dark:text-slate-400">Talking Style</label>
+                        <label class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#00f0ff] font-terminal">Talking Style</label>
                         <select
                             v-model="newSchedule.talking_style"
-                            class="w-full px-4 py-3 bg-[#fbf7f1] dark:bg-slate-800 border border-[#efe6d8] dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-[#c7a36c]/40 focus:border-[#c7a36c] outline-none transition-all dark:text-white"
+                            class="w-full px-4 py-2.5 bg-[#222222] border border-[#333333] rounded-sm focus:border-[#00f0ff] focus:neon-glow-cyan outline-none transition-all text-white"
                         >
                             <option value="none">None (Default)</option>
                             <option value="opinion">Opinion</option>
@@ -277,10 +276,10 @@ onMounted(() => {
                     </div>
 
                     <div class="space-y-2">
-                        <label class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#6a5d4d] dark:text-slate-400">Aspect Ratio</label>
+                        <label class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#00f0ff] font-terminal">Aspect Ratio</label>
                         <select
                             v-model="newSchedule.aspect_ratio"
-                            class="w-full px-4 py-3 bg-[#fbf7f1] dark:bg-slate-800 border border-[#efe6d8] dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-[#c7a36c]/40 focus:border-[#c7a36c] outline-none transition-all dark:text-white"
+                            class="w-full px-4 py-2.5 bg-[#222222] border border-[#333333] rounded-sm focus:border-[#00f0ff] focus:neon-glow-cyan outline-none transition-all text-white"
                         >
                             <option value="16:9">Widescreen (16:9)</option>
                             <option value="9:16">Shorts/Reels (9:16)</option>
@@ -291,9 +290,8 @@ onMounted(() => {
                         <button
                             type="submit"
                             :disabled="creating"
-                            class="w-full px-6 py-3 bg-[#0b1021] hover:bg-[#141a2f] disabled:bg-[#2e3346] text-[#f7f2e8] font-semibold rounded-full transition-all duration-300 flex items-center justify-center active:scale-95"
-                        >
-                            <svg v-if="creating" class="animate-spin -ml-1 mr-3 h-5 w-5 text-[#f7f2e8]" fill="none" viewBox="0 0 24 24">
+                            class="cyber-btn w-full py-3 font-semibold flex items-center justify-center disabled:opacity-50">
+                            <svg v-if="creating" class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
@@ -303,14 +301,14 @@ onMounted(() => {
                 </form>
             </div>
 
-            <div class="bg-white dark:bg-slate-900 rounded-[28px] shadow-[0_30px_60px_-40px_rgba(15,23,42,0.35)] border border-[#e6dccf] dark:border-slate-800 overflow-hidden">
-                <div class="px-8 py-6 border-b border-[#e6dccf] dark:border-slate-800 flex items-center justify-between bg-[#f7f2e8] dark:bg-slate-900/80">
+            <div class="bg-[#1a1a1a] rounded-sm shadow-[0_0_30px_rgba(0,240,255,0.08)] border border-[#222222] overflow-hidden">
+                <div class="px-6 py-5 border-b border-[#222222] flex items-center justify-between bg-[#111111]/80">
                     <div>
-                        <p class="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#6a5d4d] dark:text-slate-400">Queue</p>
-                        <h3 class="font-black text-[#15131a] dark:text-white">Active Schedules</h3>
+                        <p class="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#00f0ff] font-terminal">Queue</p>
+                        <h3 class="font-black text-white font-cyber">Active Schedules</h3>
                     </div>
-                    <button @click="fetchSchedules()" class="p-2 rounded-full border border-[#e6dccf] dark:border-slate-700 bg-white dark:bg-slate-800 text-[#6a5d4d] dark:text-slate-300 hover:text-[#0b1021] dark:hover:text-white transition-all duration-300">
-                        <svg class="w-5 h-5" :class="{'animate-spin': loading}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <button @click="fetchSchedules()" class="p-2 border border-[#333333] bg-[#1a1a1a] text-[#666666] hover:text-[#00f0ff] transition-all duration-300 rounded-sm">
+                        <svg class="w-4 h-4" :class="{'animate-spin': loading}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                         </svg>
                     </button>
@@ -319,73 +317,73 @@ onMounted(() => {
                 <div class="overflow-x-auto">
                     <table class="w-full text-left">
                         <thead>
-                            <tr class="bg-[#fbf7f1] dark:bg-slate-900/70 text-[#6a5d4d] dark:text-slate-400 text-[11px] uppercase tracking-[0.2em]">
-                                <th class="px-6 py-4 font-semibold">Topic</th>
-                                <th class="px-6 py-4 font-semibold">Channel</th>
-                                <th class="px-6 py-4 font-semibold">Daily Time</th>
-                                <th class="px-6 py-4 font-semibold">Last Run</th>
-                                <th class="px-6 py-4 font-semibold">Status</th>
-                                <th class="px-6 py-4 font-semibold text-right">Actions</th>
+                            <tr class="bg-[#0a0a0a]/70 text-[#666666] text-[11px] uppercase tracking-[0.2em] font-terminal">
+                                <th class="px-5 py-3 font-semibold">Topic</th>
+                                <th class="px-5 py-3 font-semibold">Channel</th>
+                                <th class="px-5 py-3 font-semibold">Daily Time</th>
+                                <th class="px-5 py-3 font-semibold">Last Run</th>
+                                <th class="px-5 py-3 font-semibold">Status</th>
+                                <th class="px-5 py-3 font-semibold text-right">Actions</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-[#efe6d8] dark:divide-slate-800">
+                        <tbody class="divide-y divide-[#222222]">
                             <tr v-if="schedules.data.length === 0" class="text-center">
-                                <td colspan="6" class="px-6 py-10 text-[#6a5d4d] dark:text-slate-400">
+                                <td colspan="6" class="px-5 py-8 text-[#666666]">
                                     No schedules found. Create one above!
                                 </td>
                             </tr>
-                            <tr v-for="schedule in schedules.data" :key="schedule.id" class="transition-all duration-300 hover:bg-[#fbf7f1] dark:hover:bg-slate-900/60">
-                                <td class="px-6 py-5">
-                                    <div class="text-sm font-semibold text-[#15131a] dark:text-white">{{ schedule.topic }}</div>
-                                    <div class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#6a5d4d] dark:text-slate-400">{{ schedule.style }} • {{ schedule.aspect_ratio }}</div>
+                            <tr v-for="schedule in schedules.data" :key="schedule.id" class="transition-all duration-300 hover:bg-[#0a0a0a]/40">
+                                <td class="px-5 py-4">
+                                    <div class="text-sm font-semibold text-white">{{ schedule.topic }}</div>
+                                    <div class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#666666] font-terminal">{{ schedule.style }} • {{ schedule.aspect_ratio }}</div>
                                 </td>
-                                <td class="px-6 py-5">
+                                <td class="px-5 py-4">
                                     <div v-if="schedule.youtube_token" class="flex items-center">
-                                        <img :src="schedule.youtube_token.channel_thumbnail" class="w-7 h-7 rounded-full mr-3 ring-2 ring-[#f0e6d8] dark:ring-slate-700" />
-                                        <span class="text-sm text-[#4b3f2f] dark:text-slate-300">{{ schedule.youtube_token.channel_title }}</span>
+                                        <img :src="schedule.youtube_token.channel_thumbnail" class="w-6 h-6 rounded-full mr-2 ring-1 ring-[#333333]" />
+                                        <span class="text-sm text-[#a0a0a0]">{{ schedule.youtube_token.channel_title }}</span>
                                     </div>
-                                    <span v-else class="text-xs text-[#b3a799] dark:text-slate-500">No channel</span>
+                                    <span v-else class="text-xs text-[#666666]">No channel</span>
                                 </td>
-                                <td class="px-6 py-5 text-sm font-semibold text-[#0b1021] dark:text-white">
+                                <td class="px-5 py-4 text-sm font-semibold text-[#00f0ff] font-cyber">
                                     {{ formatTime(schedule.scheduled_time) }}
                                 </td>
-                                <td class="px-6 py-5 text-sm text-[#6a5d4d] dark:text-slate-300">
+                                <td class="px-5 py-4 text-sm text-[#666666]">
                                     {{ formatDate(schedule.last_run_at) }}
                                 </td>
-                                <td class="px-6 py-5">
-                                    <span :class="['px-3 py-1 rounded-full text-[11px] font-semibold uppercase tracking-[0.2em]', getStatusColor(schedule.status)]">
+                                <td class="px-5 py-4">
+                                    <span :class="['px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em]', getStatusColor(schedule.status)]">
                                         {{ schedule.status }}
                                     </span>
-                                    <div v-if="schedule.last_error" class="text-[10px] text-[#b9382a] mt-2 max-w-[180px] truncate" :title="schedule.last_error">
+                                    <div v-if="schedule.last_error" class="text-[10px] text-[#ff00ff] mt-2 max-w-[180px] truncate" :title="schedule.last_error">
                                         {{ schedule.last_error }}
                                     </div>
                                 </td>
-                                <td class="px-6 py-5 text-right">
+                                <td class="px-5 py-4 text-right">
                                     <div class="flex items-center justify-end gap-2">
                                         <button
                                             @click="copySchedule(schedule)"
-                                            class="p-2 rounded-full border border-[#efe6d8] dark:border-slate-700 bg-white dark:bg-slate-800 text-[#6a5d4d] hover:text-[#0b1021] transition-all duration-300 active:scale-95"
+                                            class="p-2 border border-[#333333] bg-[#1a1a1a] text-[#666666] hover:text-[#00f0ff] transition-all duration-300 rounded-sm"
                                             title="Copy Schedule"
                                         >
-                                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
                                             </svg>
                                         </button>
                                         <button
                                             @click="openEditModal(schedule)"
-                                            class="p-2 rounded-full border border-[#efe6d8] dark:border-slate-700 bg-white dark:bg-slate-800 text-[#6a5d4d] hover:text-[#2f6c73] transition-all duration-300 active:scale-95"
+                                            class="p-2 border border-[#333333] bg-[#1a1a1a] text-[#666666] hover:text-[#00ff41] transition-all duration-300 rounded-sm"
                                             title="Edit Schedule"
                                         >
-                                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                             </svg>
                                         </button>
                                         <button
                                             @click="deleteSchedule(schedule.id)"
-                                            class="p-2 rounded-full border border-[#efe6d8] dark:border-slate-700 bg-white dark:bg-slate-800 text-[#6a5d4d] hover:text-[#b9382a] transition-all duration-300 active:scale-95"
+                                            class="p-2 border border-[#333333] bg-[#1a1a1a] text-[#666666] hover:text-[#ff00ff] transition-all duration-300 rounded-sm"
                                             title="Delete Schedule"
                                         >
-                                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                             </svg>
                                         </button>
@@ -397,7 +395,7 @@ onMounted(() => {
                 </div>
 
                 <!-- Pagination -->
-                <div v-if="schedules.links && schedules.links.length > 3" class="px-6 py-5 bg-[#fbf7f1] dark:bg-slate-900/70 border-t border-[#e6dccf] dark:border-slate-800 flex justify-center">
+                <div v-if="schedules.links && schedules.links.length > 3" class="px-5 py-4 bg-[#0a0a0a]/70 border-t border-[#222222] flex justify-center">
                     <nav class="flex flex-wrap gap-2">
                         <button
                             v-for="link in schedules.links"
@@ -406,8 +404,8 @@ onMounted(() => {
                             :disabled="!link.url"
                             v-html="link.label"
                             :class="[
-                                'px-4 py-2 rounded-full text-xs font-semibold transition-all duration-300 border',
-                                link.active ? 'bg-[#0b1021] text-[#f7f2e8] border-[#0b1021]' : 'bg-white dark:bg-slate-800 border-[#efe6d8] dark:border-slate-700 text-[#6a5d4d] dark:text-slate-300 hover:border-[#c7a36c]'
+                                'px-3 py-2 text-xs font-semibold transition-all duration-300 border rounded-sm',
+                                link.active ? 'bg-[#00f0ff] text-[#0a0a0a] border-[#00f0ff] neon-glow-cyan' : 'bg-[#1a1a1a] border-[#333333] text-[#666666] hover:border-[#00f0ff]/50 hover:text-[#00f0ff]'
                             ]"
                         ></button>
                     </nav>
@@ -419,47 +417,47 @@ onMounted(() => {
         <Teleport to="body">
             <div v-if="showEditModal" class="fixed inset-0 z-[9999] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
                 <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-                    <div class="fixed inset-0 bg-[#0b1021]/70 backdrop-blur-md transition-opacity" aria-hidden="true" @click="showEditModal = false"></div>
+                    <div class="fixed inset-0 bg-[#0a0a0a]/90 backdrop-blur-md transition-opacity" aria-hidden="true" @click="showEditModal = false"></div>
 
                     <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
 
-                    <div class="relative inline-block align-bottom bg-white dark:bg-slate-900 rounded-[32px] text-left overflow-hidden shadow-[0_30px_80px_-20px_rgba(11,16,33,0.6)] transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-[#e6dccf] dark:border-slate-800 z-50">
-                        <div class="bg-white dark:bg-slate-900 px-6 pt-6 pb-6">
+                    <div class="relative inline-block align-bottom bg-[#1a1a1a] rounded-sm text-left overflow-hidden shadow-[0_0_50px_rgba(0,240,255,0.2)] transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-[#222222] z-50 neon-glow-cyan">
+                        <div class="bg-[#1a1a1a] px-5 pt-5 pb-5">
                             <div class="sm:flex sm:items-start">
                                 <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
-                                    <div class="flex items-center justify-between mb-8">
-                                        <h3 class="text-2xl font-black text-[#15131a] dark:text-white tracking-tight" id="modal-title">
+                                    <div class="flex items-center justify-between mb-6">
+                                        <h3 class="text-xl font-black text-white font-cyber tracking-tight" id="modal-title">
                                             Edit Schedule
                                         </h3>
-                                        <button @click="showEditModal = false" class="p-2 -mr-2 text-[#b3a799] hover:text-[#0b1021] dark:text-slate-500 dark:hover:text-slate-300 transition-all rounded-full hover:bg-[#f2ebe0] dark:hover:bg-slate-800">
-                                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <button @click="showEditModal = false" class="p-2 text-[#666666] hover:text-[#00f0ff] transition-all rounded-sm hover:bg-[#0a0a0a]">
+                                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
                                             </svg>
                                         </button>
                                     </div>
 
-                                    <div class="space-y-6">
+                                    <div class="space-y-5">
                                         <div class="space-y-2">
-                                            <label class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#6a5d4d] dark:text-slate-400 ml-1">Topic</label>
-                                            <input v-model="editForm.topic" type="text" class="w-full px-5 py-3.5 bg-[#fbf7f1] dark:bg-slate-800 border border-[#efe6d8] dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-[#c7a36c]/40 focus:border-[#c7a36c] outline-none transition-all dark:text-white font-medium" placeholder="What's this schedule about?" />
+                                            <label class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#00f0ff] font-terminal ml-1">Topic</label>
+                                            <input v-model="editForm.topic" type="text" class="w-full px-4 py-2.5 bg-[#222222] border border-[#333333] rounded-sm focus:border-[#00f0ff] focus:neon-glow-cyan outline-none transition-all text-white font-medium" placeholder="What's this schedule about?" />
                                         </div>
 
                                         <div class="space-y-2">
-                                            <label class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#6a5d4d] dark:text-slate-400 ml-1">Daily Time</label>
-                                            <input v-model="editForm.scheduled_time" type="time" class="w-full px-5 py-3.5 bg-[#fbf7f1] dark:bg-slate-800 border border-[#efe6d8] dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-[#c7a36c]/40 focus:border-[#c7a36c] outline-none transition-all dark:text-white font-medium" />
+                                            <label class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#00f0ff] font-terminal ml-1">Daily Time</label>
+                                            <input v-model="editForm.scheduled_time" type="time" class="w-full px-4 py-2.5 bg-[#222222] border border-[#333333] rounded-sm focus:border-[#00f0ff] focus:neon-glow-cyan outline-none transition-all text-white font-medium" />
                                         </div>
 
                                         <div class="space-y-2">
-                                            <label class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#6a5d4d] dark:text-slate-400 ml-1">YouTube Channel</label>
-                                            <select v-model="editForm.youtube_token_id" class="w-full px-5 py-3.5 bg-[#fbf7f1] dark:bg-slate-800 border border-[#efe6d8] dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-[#c7a36c]/40 focus:border-[#c7a36c] outline-none transition-all dark:text-white font-medium appearance-none">
+                                            <label class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#00f0ff] font-terminal ml-1">YouTube Channel</label>
+                                            <select v-model="editForm.youtube_token_id" class="w-full px-4 py-2.5 bg-[#222222] border border-[#333333] rounded-sm focus:border-[#00f0ff] focus:neon-glow-cyan outline-none transition-all text-white font-medium appearance-none">
                                                 <option v-for="channel in channels" :key="channel.id" :value="channel.id">{{ channel.channel_title }}</option>
                                             </select>
                                         </div>
 
-                                        <div class="grid grid-cols-2 gap-5">
+                                        <div class="grid grid-cols-2 gap-4">
                                             <div class="space-y-2">
-                                                <label class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#6a5d4d] dark:text-slate-400 ml-1">Content Style</label>
-                                                <select v-model="editForm.style" class="w-full px-5 py-3.5 bg-[#fbf7f1] dark:bg-slate-800 border border-[#efe6d8] dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-[#c7a36c]/40 focus:border-[#c7a36c] outline-none transition-all dark:text-white font-medium">
+                                                <label class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#00f0ff] font-terminal ml-1">Content Style</label>
+                                                <select v-model="editForm.style" class="w-full px-4 py-2.5 bg-[#222222] border border-[#333333] rounded-sm focus:border-[#00f0ff] focus:neon-glow-cyan outline-none transition-all text-white font-medium">
                                                     <option value="story">Story</option>
                                                     <option value="science_short">Science Short</option>
                                                     <option value="hollywood_hype">Hollywood Hype</option>
@@ -468,8 +466,8 @@ onMounted(() => {
                                                 </select>
                                             </div>
                                             <div class="space-y-2">
-                                                <label class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#6a5d4d] dark:text-slate-400 ml-1">Talking Style</label>
-                                                <select v-model="editForm.talking_style" class="w-full px-5 py-3.5 bg-[#fbf7f1] dark:bg-slate-800 border border-[#efe6d8] dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-[#c7a36c]/40 focus:border-[#c7a36c] outline-none transition-all dark:text-white font-medium">
+                                                <label class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#00f0ff] font-terminal ml-1">Talking Style</label>
+                                                <select v-model="editForm.talking_style" class="w-full px-4 py-2.5 bg-[#222222] border border-[#333333] rounded-sm focus:border-[#00f0ff] focus:neon-glow-cyan outline-none transition-all text-white font-medium">
                                                     <option value="none">None</option>
                                                     <option value="opinion">Opinion</option>
                                                     <option value="storytime">Storytime</option>
@@ -480,8 +478,8 @@ onMounted(() => {
                                             </div>
                                         </div>
                                         <div class="space-y-2">
-                                            <label class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#6a5d4d] dark:text-slate-400 ml-1">Aspect Ratio</label>
-                                            <select v-model="editForm.aspect_ratio" class="w-full px-5 py-3.5 bg-[#fbf7f1] dark:bg-slate-800 border border-[#efe6d8] dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-[#c7a36c]/40 focus:border-[#c7a36c] outline-none transition-all dark:text-white font-medium">
+                                            <label class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#00f0ff] font-terminal ml-1">Aspect Ratio</label>
+                                            <select v-model="editForm.aspect_ratio" class="w-full px-4 py-2.5 bg-[#222222] border border-[#333333] rounded-sm focus:border-[#00f0ff] focus:neon-glow-cyan outline-none transition-all text-white font-medium">
                                                 <option value="16:9">Widescreen (16:9)</option>
                                                 <option value="9:16">Shorts/Reels (9:16)</option>
                                             </select>
@@ -490,15 +488,15 @@ onMounted(() => {
                                 </div>
                             </div>
                         </div>
-                        <div class="bg-[#f7f2e8] dark:bg-slate-900/80 px-8 py-6 flex flex-col sm:flex-row-reverse gap-4 border-t border-[#e6dccf] dark:border-slate-800">
-                            <button type="button" @click="updateSchedule" :disabled="updating" class="w-full sm:w-auto inline-flex justify-center items-center rounded-full px-8 py-3.5 bg-[#0b1021] hover:bg-[#141a2f] text-[#f7f2e8] font-semibold transition-all disabled:opacity-50 shadow-[0_20px_40px_-25px_rgba(11,16,33,0.7)] active:scale-95">
-                                <svg v-if="updating" class="animate-spin -ml-1 mr-2 h-5 w-5 text-[#f7f2e8]" fill="none" viewBox="0 0 24 24">
+                        <div class="bg-[#0a0a0a]/80 px-6 py-4 flex flex-col sm:flex-row-reverse gap-3 border-t border-[#222222]">
+                            <button type="button" @click="updateSchedule" :disabled="updating" class="cyber-btn flex-1 py-3 font-semibold flex items-center justify-center disabled:opacity-50">
+                                <svg v-if="updating" class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                 </svg>
                                 {{ updating ? 'Saving Changes...' : 'Save Changes' }}
                             </button>
-                            <button type="button" @click="showEditModal = false" class="w-full sm:w-auto inline-flex justify-center items-center rounded-full px-8 py-3.5 bg-white dark:bg-slate-800 border border-[#efe6d8] dark:border-slate-700 text-[#6a5d4d] dark:text-slate-300 font-semibold hover:border-[#c7a36c] transition-all active:scale-95">
+                            <button type="button" @click="showEditModal = false" class="flex-1 bg-[#1a1a1a] hover:bg-[#222222] text-[#666666] font-semibold py-3 px-6 border border-[#333333] hover:border-[#00f0ff]/50 rounded-sm transition-all">
                                 Cancel
                             </button>
                         </div>

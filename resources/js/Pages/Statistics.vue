@@ -50,13 +50,13 @@ onMounted(() => {
 
         <template #actions>
             <div class="flex items-center gap-3">
-                <div class="flex items-center gap-2 rounded-full border border-[#e6dccf] dark:border-slate-700 bg-white/80 dark:bg-slate-900/60 px-3 py-2 shadow-[0_10px_30px_-20px_rgba(15,23,42,0.4)]">
-                    <span class="text-[11px] font-bold uppercase tracking-[0.2em] text-[#6a5d4d] dark:text-slate-300">Window</span>
+                <div class="flex items-center gap-2 rounded-sm border border-[#222222] bg-[#1a1a1a]/60 px-3 py-2 shadow-[0_0_20px_rgba(0,240,255,0.1)]">
+                    <span class="text-[10px] font-bold uppercase tracking-[0.2em] text-[#666666] font-terminal">Window</span>
                     <div class="flex gap-1">
                         <button v-for="d in [7, 14, 30, 60, 90]" :key="d"
                                 @click="days = d; fetchStatistics()"
-                                :class="['px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all duration-300',
-                                         days === d ? 'bg-[#0b1021] text-[#f7f2e8] shadow-[0_10px_20px_-12px_rgba(11,16,33,0.6)]' : 'text-[#6a5d4d] dark:text-slate-300 hover:text-[#2b2218] dark:hover:text-white hover:bg-[#f2ebe0] dark:hover:bg-slate-800']">
+                                :class="['px-2.5 py-1 text-[10px] font-semibold transition-all duration-300 rounded-sm',
+                                         days === d ? 'bg-[#00f0ff] text-[#0a0a0a] neon-glow-cyan' : 'text-[#666666] hover:text-[#00f0ff] hover:bg-[#222222]']">
                             {{ d }}d
                         </button>
                     </div>
@@ -65,84 +65,87 @@ onMounted(() => {
         </template>
 
         <div class="space-y-8">
-            <div class="relative overflow-hidden rounded-[32px] border border-[#e6dccf] dark:border-slate-800 bg-[#f7f2e8] dark:bg-slate-900/70 px-8 py-10 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.4)]">
-                <div class="absolute inset-0 bg-gradient-to-br from-[#fff7ee] via-transparent to-transparent dark:from-slate-900/50"></div>
-                <div class="relative flex flex-col gap-3">
-                    <p class="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#6a5d4d] dark:text-slate-400">Intelligence Stream</p>
-                    <h2 class="text-3xl font-black text-[#15131a] dark:text-white tracking-tight">Upload Overview</h2>
-                    <p class="text-sm text-[#6a5d4d] dark:text-slate-400 max-w-2xl">A polished view of publishing momentum, tuned for quick decisions and clean reporting.</p>
+            <div class="relative overflow-hidden rounded-sm border border-[#222222] bg-[#111111] px-6 py-8 shadow-[0_0_30px_rgba(0,240,255,0.05)] holographic">
+                <div class="absolute inset-0 bg-gradient-to-br from-[#00f0ff]/5 via-transparent to-transparent"></div>
+                <div class="relative flex flex-col gap-2">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#00f0ff] font-terminal">Intelligence Stream</p>
+                    <h2 class="text-3xl font-black text-white tracking-tight font-cyber">Upload Overview</h2>
+                    <p class="text-sm text-[#666666] max-w-2xl">A polished view of publishing momentum, tuned for quick decisions and clean reporting.</p>
                 </div>
             </div>
 
-            <div v-if="loading" class="flex justify-center items-center py-20">
-                <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-[#0b1021] dark:border-white"></div>
+            <div v-if="loading" class="flex justify-center items-center py-16">
+                <div class="relative w-10 h-10">
+                    <div class="absolute inset-0 border-4 border-[#00f0ff]/20 rounded-sm"></div>
+                    <div class="absolute inset-0 border-4 border-[#00f0ff] border-t-transparent animate-spin rounded-sm"></div>
+                </div>
             </div>
 
             <div v-else class="space-y-8">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
-                    <div class="group relative overflow-hidden rounded-[26px] border border-[#e6dccf] dark:border-slate-800 bg-white dark:bg-slate-900/70 p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_30px_60px_-35px_rgba(15,23,42,0.45)]">
-                        <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#0b1021] via-[#4b3f2f] to-[#c78c4a]"></div>
-                        <p class="text-[11px] font-semibold uppercase tracking-[0.25em] text-[#6a5d4d] dark:text-slate-400">Total</p>
-                        <div class="mt-4 flex items-end justify-between">
-                            <div class="text-4xl font-black text-[#0b1021] dark:text-white">{{ summary.total_videos }}</div>
-                            <div class="rounded-full bg-[#f2ebe0] dark:bg-slate-800 px-3 py-1 text-[11px] font-semibold text-[#6a5d4d] dark:text-slate-300">Videos</div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="group relative overflow-hidden rounded-sm border border-[#222222] bg-[#1a1a1a] p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_30px_rgba(0,240,255,0.15)] hover:border-[#00f0ff]/30">
+                        <div class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-[#00f0ff] via-[#0080ff] to-[#bf00ff]"></div>
+                        <p class="text-[11px] font-semibold uppercase tracking-[0.25em] text-[#666666] font-terminal">Total</p>
+                        <div class="mt-3 flex items-end justify-between">
+                            <div class="text-4xl font-black text-white font-cyber">{{ summary.total_videos }}</div>
+                            <div class="rounded-sm bg-[#222222] px-2 py-1 text-[10px] font-semibold text-[#666666] border border-[#333333]">Videos</div>
                         </div>
                     </div>
-                    <div class="group relative overflow-hidden rounded-[26px] border border-[#e6dccf] dark:border-slate-800 bg-white dark:bg-slate-900/70 p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_30px_60px_-35px_rgba(15,23,42,0.45)]">
-                        <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#551d1b] via-[#b9382a] to-[#ff7a59]"></div>
-                        <p class="text-[11px] font-semibold uppercase tracking-[0.25em] text-[#6a5d4d] dark:text-slate-400">YouTube</p>
-                        <div class="mt-4 flex items-end justify-between">
-                            <div class="text-4xl font-black text-[#551d1b] dark:text-white">{{ summary.youtube_videos }}</div>
-                            <div class="rounded-full bg-[#fde7dd] dark:bg-slate-800 px-3 py-1 text-[11px] font-semibold text-[#8a3a2f] dark:text-slate-300">Uploads</div>
+                    <div class="group relative overflow-hidden rounded-sm border border-[#222222] bg-[#1a1a1a] p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_30px_rgba(255,0,255,0.15)] hover:border-[#ff00ff]/30">
+                        <div class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-[#ff00ff] via-[#ff5500] to-[#ffaa00]"></div>
+                        <p class="text-[11px] font-semibold uppercase tracking-[0.25em] text-[#666666] font-terminal">YouTube</p>
+                        <div class="mt-3 flex items-end justify-between">
+                            <div class="text-4xl font-black text-white font-cyber">{{ summary.youtube_videos }}</div>
+                            <div class="rounded-sm bg-[#222222] px-2 py-1 text-[10px] font-semibold text-[#666666] border border-[#333333]">Uploads</div>
                         </div>
                     </div>
-                    <div class="group relative overflow-hidden rounded-[26px] border border-[#e6dccf] dark:border-slate-800 bg-white dark:bg-slate-900/70 p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_30px_60px_-35px_rgba(15,23,42,0.45)]">
-                        <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#1a2a2f] via-[#2f6c73] to-[#6dd3ce]"></div>
-                        <p class="text-[11px] font-semibold uppercase tracking-[0.25em] text-[#6a5d4d] dark:text-slate-400">Channels</p>
-                        <div class="mt-4 flex items-end justify-between">
-                            <div class="text-4xl font-black text-[#1a2a2f] dark:text-white">{{ summary.total_channels }}</div>
-                            <div class="rounded-full bg-[#e3f5f4] dark:bg-slate-800 px-3 py-1 text-[11px] font-semibold text-[#2f6c73] dark:text-slate-300">Connected</div>
+                    <div class="group relative overflow-hidden rounded-sm border border-[#222222] bg-[#1a1a1a] p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_30px_rgba(0,255,65,0.15)] hover:border-[#00ff41]/30">
+                        <div class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-[#00ff41] via-[#00f0ff] to-[#0080ff]"></div>
+                        <p class="text-[11px] font-semibold uppercase tracking-[0.25em] text-[#666666] font-terminal">Channels</p>
+                        <div class="mt-3 flex items-end justify-between">
+                            <div class="text-4xl font-black text-white font-cyber">{{ summary.total_channels }}</div>
+                            <div class="rounded-sm bg-[#222222] px-2 py-1 text-[10px] font-semibold text-[#666666] border border-[#333333]">Connected</div>
                         </div>
                     </div>
                 </div>
 
-                <div class="rounded-[28px] border border-[#e6dccf] dark:border-slate-800 bg-white dark:bg-slate-900/70 overflow-hidden shadow-[0_30px_60px_-40px_rgba(15,23,42,0.35)]">
-                    <div class="flex items-center justify-between px-8 py-6 bg-[#f7f2e8] dark:bg-slate-900/80 border-b border-[#e6dccf] dark:border-slate-800">
+                <div class="rounded-sm border border-[#222222] bg-[#1a1a1a] overflow-hidden shadow-[0_0_30px_rgba(0,240,255,0.08)]">
+                    <div class="flex items-center justify-between px-6 py-5 bg-[#111111]/80 border-b border-[#222222]">
                         <div>
-                            <p class="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#6a5d4d] dark:text-slate-400">Cadence</p>
-                            <h3 class="text-lg font-black text-[#15131a] dark:text-white">Daily Upload History</h3>
+                            <p class="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#00f0ff] font-terminal">Cadence</p>
+                            <h3 class="text-base font-black text-white font-cyber">Daily Upload History</h3>
                         </div>
                     </div>
-                    <div class="divide-y divide-[#efe6d8] dark:divide-slate-800">
-                        <div v-for="day in dailyStats" :key="day.date" class="px-8 py-6 transition-all duration-300 hover:bg-[#fbf7f1] dark:hover:bg-slate-900/60">
-                            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-                                <span class="text-sm font-semibold text-[#15131a] dark:text-white">{{ formatDate(day.date) }}</span>
+                    <div class="divide-y divide-[#222222]">
+                        <div v-for="day in dailyStats" :key="day.date" class="px-6 py-5 transition-all duration-300 hover:bg-[#0a0a0a]/40">
+                            <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                                <span class="text-sm font-semibold text-white">{{ formatDate(day.date) }}</span>
                                 <div class="flex items-center gap-2">
-                                    <span class="text-2xl font-black" :class="day.total > 0 ? 'text-[#0b1021] dark:text-white' : 'text-[#b3a799] dark:text-slate-600'">{{ day.total }}</span>
-                                    <span class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#6a5d4d] dark:text-slate-400">Videos</span>
+                                    <span class="text-2xl font-black" :class="day.total > 0 ? 'text-[#00f0ff] font-cyber' : 'text-[#333333]'">{{ day.total }}</span>
+                                    <span class="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#666666] font-terminal">Videos</span>
                                 </div>
                             </div>
-                            <div v-if="day.channels.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div v-if="day.channels.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                                 <div v-for="channel in day.channels" :key="channel.name"
-                                     class="flex items-center gap-3 rounded-2xl border border-[#efe6d8] dark:border-slate-800 bg-[#fbf7f1] dark:bg-slate-900/60 p-3 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_40px_-30px_rgba(15,23,42,0.35)]">
-                                    <div v-if="channel.thumbnail" class="w-9 h-9 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-white dark:ring-slate-800">
+                                     class="flex items-center gap-2.5 rounded-sm border border-[#222222] bg-[#222222] p-2.5 transition-all duration-300 hover:-translate-y-0.5 hover:border-[#00f0ff]/30 hover:shadow-[0_0_20px_rgba(0,240,255,0.1)]">
+                                    <div v-if="channel.thumbnail" class="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 ring-1 ring-[#333333]">
                                         <img :src="channel.thumbnail" class="w-full h-full object-cover">
                                     </div>
-                                    <div v-else class="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-xs"
-                                         :class="channel.type === 'youtube' ? 'bg-gradient-to-br from-[#b9382a] to-[#ff7a59]' : 'bg-gradient-to-br from-[#2f6c73] to-[#6dd3ce]'">
+                                    <div v-else class="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-xs"
+                                         :class="channel.type === 'youtube' ? 'bg-gradient-to-br from-[#ff00ff] to-[#ff5500]' : 'bg-gradient-to-br from-[#00ff41] to-[#00f0ff]'">
                                         {{ channel.name.charAt(0) }}
                                     </div>
                                     <div class="flex-1 min-w-0">
-                                        <div class="text-sm font-semibold text-[#15131a] dark:text-white truncate">{{ channel.name }}</div>
-                                        <div class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#6a5d4d] dark:text-slate-400">{{ channel.type }}</div>
+                                        <div class="text-sm font-semibold text-white truncate">{{ channel.name }}</div>
+                                        <div class="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#666666] font-terminal">{{ channel.type }}</div>
                                     </div>
-                                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-                                         :class="channel.type === 'youtube' ? 'bg-[#fde7dd] text-[#b9382a] dark:bg-slate-800 dark:text-slate-200' : 'bg-[#e3f5f4] text-[#2f6c73] dark:bg-slate-800 dark:text-slate-200'">
+                                    <div class="w-7 h-7 rounded-sm flex items-center justify-center text-xs font-bold"
+                                         :class="channel.type === 'youtube' ? 'bg-[#1a1a1a] text-[#ff00ff] border border-[#ff00ff]/30' : 'bg-[#1a1a1a] text-[#00ff41] border border-[#00ff41]/30'">
                                         {{ channel.count }}
                                     </div>
                                 </div>
                             </div>
-                            <div v-else class="text-sm text-[#b3a799] dark:text-slate-500 italic">No uploads</div>
+                            <div v-else class="text-sm text-[#333333] font-terminal italic">No uploads</div>
                         </div>
                     </div>
                 </div>
