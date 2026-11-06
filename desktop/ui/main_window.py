@@ -1,4 +1,5 @@
-from PySide6.QtGui import QAction, QIcon
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QAction, QIcon, QPixmap
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QHBoxLayout, QLabel, QMainWindow, QMenu,
                                QMessageBox, QPushButton, QStackedWidget, QSystemTrayIcon, QVBoxLayout, QWidget)
 
@@ -8,8 +9,10 @@ from desktop.ui.dashboard import DashboardPage
 from desktop.ui.scheduler_runner import SchedulerRunner
 from desktop.ui.schedules_page import SchedulesPage
 from desktop.ui.settings_page import SettingsPage
+from desktop.ui import icons
 from desktop.ui.statistics_page import StatisticsPage
 from desktop.ui.story_view import StoryView
+from desktop.ui.style import glow
 
 STATE_TEXT = {"starting": "Starting render worker…", "idle": "Worker idle", "busy": "Rendering…",
               "crashed": "Worker crashed — restarting", "stopped": "Worker stopped"}
@@ -40,17 +43,26 @@ class MainWindow(QMainWindow):
             self.stack.addWidget(w)
 
         sidebar = QWidget(objectName="sidebar")
-        sidebar.setFixedWidth(200)
+        sidebar.setAttribute(Qt.WA_StyledBackground, True)
+        sidebar.setFixedWidth(210)
         sl = QVBoxLayout(sidebar)
-        sl.setContentsMargins(12, 16, 12, 16)
-        logo = QLabel("VideoAI", objectName="h2")
+        sl.setContentsMargins(14, 20, 14, 16)
+        sl.setSpacing(6)
+        logo = QLabel(alignment=Qt.AlignLeft)
+        logo.setPixmap(QPixmap(str(paths.assets_dir() / "logo.png")).scaled(
+            52, 52, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         sl.addWidget(logo)
-        sl.addSpacing(12)
+        sl.addWidget(QLabel("VideoAI", objectName="brand"))
+        sl.addSpacing(18)
         self.nav = QButtonGroup(self)
         self.nav_buttons = {}
-        for key, label in [("dashboard", "Dashboard"), ("schedules", "Schedules"),
-                           ("channels", "YouTube Channels"), ("statistics", "Statistics"), ("settings", "Settings")]:
+        for key, label, ic in [("dashboard", "Dashboard", "dashboard"), ("schedules", "Schedules", "calendar"),
+                               ("channels", "YouTube Channels", "youtube"), ("statistics", "Statistics", "chart"),
+                               ("settings", "Settings", "settings")]:
             b = QPushButton(label, objectName="nav", checkable=True)
+            b.setIcon(icons.icon(ic, "#dbe4ff", 18))
+            b.setIconSize(QSize(18, 18))
+            b.setCursor(Qt.PointingHandCursor)
             # toggled (not clicked) so keyboard/accessibility presses switch pages too
             b.toggled.connect(lambda on, k=key: on and self.show_page(k))
             self.nav.addButton(b)
@@ -59,11 +71,12 @@ class MainWindow(QMainWindow):
         sl.addStretch()
         self.worker_label = QLabel(STATE_TEXT["starting"], objectName="muted", wordWrap=True)
         sl.addWidget(self.worker_label)
+        glow(sidebar, radius=28, alpha=90)
 
-        root = QWidget()
+        root = QWidget(objectName="root")
         rl = QHBoxLayout(root)
-        rl.setContentsMargins(0, 0, 0, 0)
-        rl.setSpacing(0)
+        rl.setContentsMargins(16, 16, 16, 16)
+        rl.setSpacing(16)
         rl.addWidget(sidebar)
         rl.addWidget(self.stack, 1)
         self.setCentralWidget(root)
