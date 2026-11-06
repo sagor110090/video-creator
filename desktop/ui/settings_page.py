@@ -20,6 +20,7 @@ class SettingsPage(QWidget):
         card = QFrame(objectName="card")
         form = QFormLayout(card)
         form.setLabelAlignment(Qt.AlignRight)
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
 
         self.provider = QComboBox()
         self.provider.addItem("DeepSeek", "deepseek")
@@ -64,6 +65,7 @@ class SettingsPage(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(24, 20, 24, 20)
         root.addWidget(QLabel("Settings", objectName="h1"))
+        card.setMaximumWidth(820)
         root.addWidget(card)
         root.addLayout(bottom)
         root.addStretch()

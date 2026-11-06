@@ -48,6 +48,7 @@ class DashboardPage(QWidget):
         form_box = QVBoxLayout(card)
         form_box.addWidget(QLabel("Create New Story", objectName="h2"))
         form = QFormLayout()
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         self.topic = QLineEdit(placeholderText="What is the video about? e.g. The Man Who Sold the Eiffel Tower")
         self.style = QComboBox()
         for key, label in story_ai.STYLES.items():
@@ -78,7 +79,7 @@ class DashboardPage(QWidget):
         form_box.addWidget(self.script, 1)
         self.error = QLabel(objectName="error", wordWrap=True)
         form_box.addWidget(self.error)
-        self.create_btn = QPushButton("Create & Render", objectName="primary")
+        self.create_btn = QPushButton("Create && Render", objectName="primary")
         self.create_btn.clicked.connect(self._create)
         form_box.addWidget(self.create_btn, alignment=Qt.AlignRight)
 
@@ -149,7 +150,7 @@ class DashboardPage(QWidget):
 
     def _created(self, story_id):
         self.create_btn.setEnabled(True)
-        self.create_btn.setText("Create & Render")
+        self.create_btn.setText("Create && Render")
         self.title.clear()
         self.script.clear()
         self._yt = {}
@@ -159,5 +160,5 @@ class DashboardPage(QWidget):
 
     def _create_failed(self, e):
         self.create_btn.setEnabled(True)
-        self.create_btn.setText("Create & Render")
+        self.create_btn.setText("Create && Render")
         self.error.setText(str(e))

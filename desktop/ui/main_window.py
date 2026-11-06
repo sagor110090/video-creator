@@ -43,7 +43,8 @@ class MainWindow(QMainWindow):
             b = QPushButton(label, objectName="nav", checkable=True, enabled=enabled)
             if not enabled:
                 b.setToolTip("Coming in a later phase")
-            b.clicked.connect(lambda _=False, k=key: self.show_page(k))
+            # toggled (not clicked) so keyboard/accessibility presses switch pages too
+            b.toggled.connect(lambda on, k=key: on and self.show_page(k))
             self.nav.addButton(b)
             self.nav_buttons[key] = b
             sl.addWidget(b)

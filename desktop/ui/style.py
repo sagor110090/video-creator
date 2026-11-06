@@ -5,7 +5,7 @@ STATUS_COLORS = {"pending": "#4b5563", "running": "#f59e0b", "done": "#10b981", 
                  "draft": "#4b5563", "queued": "#8b5cf6", "rendering": "#f59e0b"}
 
 QSS = f"""
-* {{ font-family: "SF Pro Text", "Helvetica Neue", Arial; font-size: 13px; color: #e5e7eb; }}
+* {{ font-family: "Helvetica Neue", Arial; font-size: 13px; color: #e5e7eb; }}
 QMainWindow, QWidget#page, QScrollArea, QScrollArea > QWidget > QWidget {{ background: #0b0f17; }}
 QWidget#sidebar {{ background: #070a10; border-right: 1px solid #1f2937; }}
 QPushButton#nav {{ text-align: left; padding: 10px 16px; border: none; border-radius: 8px; background: transparent; }}
