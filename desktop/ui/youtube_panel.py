@@ -36,7 +36,7 @@ class YouTubePanel(QGroupBox):
             when_row.addWidget(w)
         when_row.addStretch()
         buttons = QHBoxLayout()
-        self.meta_btn = QPushButton("✨ Generate title & tags", clicked=self._generate)
+        self.meta_btn = QPushButton("✨ Generate title && tags", clicked=self._generate)
         self.save_btn = QPushButton("Save", clicked=self.save)
         self.upload_btn = QPushButton("Upload to YouTube", objectName="primary", clicked=self._upload)
         for b in (self.meta_btn, self.save_btn, self.upload_btn):

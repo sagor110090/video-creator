@@ -21,14 +21,20 @@ QPushButton:hover {{ border-color: {ACCENT}; }}
 QPushButton:disabled {{ color: #6b7280; border-color: #1f2937; }}
 QPushButton#primary {{ background: {ACCENT}; color: #031014; font-weight: 600; border: none; }}
 QPushButton#primary:disabled {{ background: #164e63; color: #6b7280; }}
-QLineEdit, QPlainTextEdit, QComboBox, QSpinBox {{ background: #0b1220; border: 1px solid #374151;
+QLineEdit, QPlainTextEdit, QComboBox, QSpinBox, QTimeEdit, QDateTimeEdit {{ background: #0b1220; border: 1px solid #374151;
     border-radius: 6px; padding: 5px; selection-background-color: #0e7490; }}
-QLineEdit:focus, QPlainTextEdit:focus, QComboBox:focus {{ border-color: {ACCENT}; }}
+QLineEdit:focus, QPlainTextEdit:focus, QComboBox:focus, QTimeEdit:focus, QDateTimeEdit:focus {{ border-color: {ACCENT}; }}
 QListWidget {{ background: #0b1220; border: 1px solid #1f2937; border-radius: 8px; }}
 QListWidget::item {{ padding: 8px; border-bottom: 1px solid #111827; }}
 QListWidget::item:selected {{ background: #0e2a33; }}
 QProgressBar {{ background: #1f2937; border: none; border-radius: 4px; height: 8px; text-align: center; }}
 QProgressBar::chunk {{ background: {ACCENT}; border-radius: 4px; }}
+QTableWidget {{ background: #0b1220; alternate-background-color: #0f172a; border: 1px solid #1f2937;
+    border-radius: 8px; gridline-color: #1f2937; selection-background-color: #0e2a33; }}
+QHeaderView::section {{ background: #111827; color: #9ca3af; border: none; border-bottom: 1px solid #1f2937; padding: 6px; }}
+QTableCornerButton::section {{ background: #111827; border: none; }}
+QGroupBox {{ border: 1px solid #1f2937; border-radius: 8px; margin-top: 10px; padding-top: 8px; }}
+QGroupBox::title {{ subcontrol-origin: margin; left: 10px; color: {ACCENT}; font-weight: 600; }}
 QStatusBar {{ background: #070a10; color: #9ca3af; }}
 """
 
