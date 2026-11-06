@@ -3,8 +3,12 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QHBoxLayout, QLabel, 
                                QMessageBox, QPushButton, QStackedWidget, QSystemTrayIcon, QVBoxLayout, QWidget)
 
 from desktop.core import paths
+from desktop.ui.channels_page import ChannelsPage
 from desktop.ui.dashboard import DashboardPage
+from desktop.ui.scheduler_runner import SchedulerRunner
+from desktop.ui.schedules_page import SchedulesPage
 from desktop.ui.settings_page import SettingsPage
+from desktop.ui.statistics_page import StatisticsPage
 from desktop.ui.story_view import StoryView
 
 STATE_TEXT = {"starting": "Starting render worker…", "idle": "Worker idle", "busy": "Rendering…",
@@ -24,8 +28,15 @@ class MainWindow(QMainWindow):
         self.dashboard = DashboardPage(bridge, open_story=self.open_story)
         self.story_view = StoryView(bridge, back=self.show_dashboard)
         self.settings_page = SettingsPage()
+        self.schedules_page = SchedulesPage(bridge)
+        self.channels_page = ChannelsPage()
+        self.statistics_page = StatisticsPage()
+        self.pages = {"dashboard": self.dashboard, "schedules": self.schedules_page,
+                      "channels": self.channels_page, "statistics": self.statistics_page,
+                      "settings": self.settings_page}
         self.stack = QStackedWidget()
-        for w in (self.dashboard, self.story_view, self.settings_page):
+        for w in (self.dashboard, self.story_view, self.settings_page, self.schedules_page,
+                  self.channels_page, self.statistics_page):
             self.stack.addWidget(w)
 
         sidebar = QWidget(objectName="sidebar")
@@ -37,12 +48,9 @@ class MainWindow(QMainWindow):
         sl.addSpacing(12)
         self.nav = QButtonGroup(self)
         self.nav_buttons = {}
-        for key, label, enabled in [("dashboard", "Dashboard", True), ("schedules", "Schedules", False),
-                                    ("channels", "YouTube Channels", False), ("statistics", "Statistics", False),
-                                    ("settings", "Settings", True)]:
-            b = QPushButton(label, objectName="nav", checkable=True, enabled=enabled)
-            if not enabled:
-                b.setToolTip("Coming in a later phase")
+        for key, label in [("dashboard", "Dashboard"), ("schedules", "Schedules"),
+                           ("channels", "YouTube Channels"), ("statistics", "Statistics"), ("settings", "Settings")]:
+            b = QPushButton(label, objectName="nav", checkable=True)
             # toggled (not clicked) so keyboard/accessibility presses switch pages too
             b.toggled.connect(lambda on, k=key: on and self.show_page(k))
             self.nav.addButton(b)
@@ -61,20 +69,24 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
         self.show_page("dashboard")
 
+        self.runner = SchedulerRunner(bridge, parent=self)
+        self.runner.message.connect(lambda m: self.statusBar().showMessage(m, 15000))
+        self.runner.changed.connect(self._refresh_current)
+        self.runner.start()
         bridge.stateChanged.connect(self._on_state)
         bridge.workerCrashed.connect(lambda msg: QMessageBox.warning(self, "Render worker", msg))
         self._tray(icon)
 
     # ------------------------------------------------------------ navigation
     def show_page(self, key):
-        page = {"dashboard": self.dashboard, "settings": self.settings_page}.get(key)
+        page = self.pages.get(key)
         if page is None:
             return
         self.nav_buttons[key].setChecked(True)
-        if page is self.dashboard:
-            self.dashboard.refresh()
         if page is self.settings_page:
-            self.settings_page.load()
+            page.load()
+        else:
+            page.refresh()
         self.stack.setCurrentWidget(page)
 
     def show_dashboard(self):
@@ -84,6 +96,13 @@ class MainWindow(QMainWindow):
         self.story_view.show_story(story_id)
         self.nav_buttons["dashboard"].setChecked(True)
         self.stack.setCurrentWidget(self.story_view)
+
+    def _refresh_current(self):
+        page = self.stack.currentWidget()
+        if page is self.story_view:
+            self.story_view.refresh()
+        elif page is not self.settings_page and hasattr(page, "refresh"):
+            page.refresh()
 
     # ------------------------------------------------------------ worker state / tray
     def _on_state(self, state):

@@ -11,7 +11,8 @@ from desktop.core import paths, settings
 
 KEY_FIELDS = [("deepseek_api_key", "DeepSeek API key"), ("groq_api_key", "Groq API key"),
               ("pexels_api_key", "Pexels API key (free)"), ("pixabay_api_key", "Pixabay API key (free)"),
-              ("pollinations_token", "Pollinations token (optional)")]
+              ("pollinations_token", "Pollinations token (optional)"),
+              ("youtube_client_id", "YouTube OAuth client ID"), ("youtube_client_secret", "YouTube OAuth client secret")]
 
 
 class SettingsPage(QWidget):
@@ -28,7 +29,7 @@ class SettingsPage(QWidget):
         form.addRow("AI writer", self.provider)
         self.fields = {}
         for key, label in KEY_FIELDS:
-            f = QLineEdit(echoMode=QLineEdit.Password)
+            f = QLineEdit(echoMode=QLineEdit.Normal if key == "youtube_client_id" else QLineEdit.Password)
             self.fields[key] = f
             form.addRow(label, f)
         self.image_sources = QLineEdit()

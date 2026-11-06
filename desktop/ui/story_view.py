@@ -12,7 +12,9 @@ from PySide6.QtWidgets import (QDialog, QFileDialog, QFrame, QGridLayout, QHBoxL
                                QWidget)
 
 from desktop.core import db, paths
+from desktop.services import youtube  # noqa: F401  (patched in tests via story_view.youtube)
 from desktop.ui.style import chip_style
+from desktop.ui.youtube_panel import YouTubePanel
 
 BUSY = ("queued", "rendering")
 SOURCE_NAMES = {"openverse": "Openverse", "pexels": "Pexels", "pixabay": "Pixabay", "pollinations": "Pollinations (AI)",
@@ -275,6 +277,8 @@ class StoryView(QWidget):
         top.addLayout(prog)
         top.addWidget(self.error)
         top.addWidget(self.player)
+        self.yt = YouTubePanel()
+        top.addWidget(self.yt)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(24, 20, 24, 20)
@@ -302,6 +306,7 @@ class StoryView(QWidget):
                 self.list_box.insertWidget(self.list_box.count() - 1, row)
         self.refresh(rows=False)
         self._load_final()
+        self.yt.load(story_id)
 
     def refresh(self, rows=True):
         if self.story_id is None:
@@ -325,6 +330,7 @@ class StoryView(QWidget):
             self.render_btn.setText({"draft": "Render", "failed": "Retry / resume",
                                      "done": "Render missing"}.get(st.status, "Rendering…"))
             self.rebuild_btn.setEnabled(not busy and all(sc.clip_status == "done" for sc in st.scenes))
+            self.yt.refresh_status()
             if rows:
                 for sc in st.scenes:
                     if sc.id in self.rows:

@@ -4,16 +4,16 @@ from desktop.ui.tasks import run_async
 
 
 def test_run_async_result_and_error(qtbot):
+    # wait on the callback's effect, not the finished signal: the task can finish before a waiter connects
     got = {}
-    with qtbot.waitSignal(run_async(lambda a, b: a + b, 2, 3, on_done=lambda r: got.update(r=r)).signals.finished,
-                          timeout=5000):
-        pass
+    run_async(lambda a, b: a + b, 2, 3, on_done=lambda r: got.update(r=r))
+    qtbot.waitUntil(lambda: "r" in got, timeout=5000)
     assert got["r"] == 5
 
     def boom():
         raise ValueError("bad")
-    with qtbot.waitSignal(run_async(boom, on_error=lambda e: got.update(e=str(e))).signals.finished, timeout=5000):
-        pass
+    run_async(boom, on_error=lambda e: got.update(e=str(e)))
+    qtbot.waitUntil(lambda: "e" in got, timeout=5000)
     assert got["e"] == "bad"
 
 
