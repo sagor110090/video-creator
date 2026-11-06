@@ -44,7 +44,7 @@ def test_picker_default_library_and_add(qtbot, tmp_path, monkeypatch):
 def test_dashboard_create_uses_chosen_voice(qtbot, Session, monkeypatch, tmp_path):
     from desktop.tests.test_ui import FakeBridge
     from desktop.ui import dashboard
-    monkeypatch.setattr(dashboard.story_ai, "generate_image_prompts", lambda cfg, n: ["p"] * len(n))
+    monkeypatch.setattr(dashboard.story_ai, "generate_image_prompts", lambda cfg, n, *style: ["p"] * len(n))
     anna = voices.add_sample(_wav(tmp_path / "anna.wav"))
     opened = []
     page = dashboard.DashboardPage(FakeBridge(), open_story=opened.append)
@@ -70,3 +70,32 @@ def test_schedule_stores_voice(qtbot, Session, tmp_path):
     with Session() as s:
         assert s.query(db.Schedule).one().voice_sample == str(anna)
     assert page.table.item(0, page.COLUMNS.index("Voice")).text() == "anna"
+
+
+def test_dashboard_and_schedule_image_style(qtbot, Session, monkeypatch):
+    from desktop.tests.test_ui import FakeBridge
+    from desktop.ui import dashboard
+    from desktop.ui.schedules_page import SchedulesPage
+    seen = {}
+    monkeypatch.setattr(dashboard.story_ai, "generate_image_prompts",
+                        lambda cfg, n, style="auto": seen.setdefault("style", style) and ["p"] * len(n))
+    opened = []
+    page = dashboard.DashboardPage(FakeBridge(), open_story=opened.append)
+    qtbot.addWidget(page)
+    page.image_style.setCurrentIndex(page.image_style.findData("cartoon"))
+    page.script.setPlainText("A happy bunny hops around. The bunny finds a carrot.")
+    page.create_btn.click()
+    qtbot.waitUntil(lambda: bool(opened), timeout=5000)
+    with Session() as s:
+        assert s.get(db.Story, opened[0]).image_style == "cartoon"
+    assert seen["style"] == "cartoon"
+
+    sp = SchedulesPage(FakeBridge())
+    qtbot.addWidget(sp)
+    sp.refresh()
+    sp.topic.setText("bedtime stories")
+    sp.image_style.setCurrentIndex(sp.image_style.findData("cartoon"))
+    sp.add_btn.click()
+    with Session() as s:
+        assert s.query(db.Schedule).one().image_style == "cartoon"
+    assert sp.table.item(0, sp.COLUMNS.index("Images")).text() == "Cartoon / kids"

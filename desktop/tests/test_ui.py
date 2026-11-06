@@ -61,7 +61,7 @@ def test_dashboard_write_with_ai_and_create(qtbot, Session, bridge, monkeypatch)
     from desktop.ui import dashboard
     monkeypatch.setattr(dashboard.story_ai, "generate_story",
                         lambda cfg, topic, style, ar, ts: {"title": "AI Title", "content": "Alpha scene here. Beta scene here."})
-    monkeypatch.setattr(dashboard.story_ai, "generate_image_prompts", lambda cfg, n: [f"prompt {i}" for i in range(len(n))])
+    monkeypatch.setattr(dashboard.story_ai, "generate_image_prompts", lambda cfg, n, *style: [f"prompt {i}" for i in range(len(n))])
     opened = []
     page = dashboard.DashboardPage(bridge, open_story=opened.append)
     qtbot.addWidget(page)

@@ -35,7 +35,7 @@ def fake_ai(monkeypatch):
         return {"title": "Space Title", "content": "Stars are far away from us. Planets orbit the sun slowly.",
                 "youtube_title": "YT", "youtube_description": "D", "youtube_tags": "a,b"}
     monkeypatch.setattr(scheduler.story_ai, "generate_story", story)
-    monkeypatch.setattr(scheduler.story_ai, "generate_image_prompts", lambda cfg, n: ["p"] * len(n))
+    monkeypatch.setattr(scheduler.story_ai, "generate_image_prompts", lambda cfg, n, *style: ["p"] * len(n))
     monkeypatch.setattr(scheduler.story_ai, "search_news",
                         lambda cfg, q, style: [{"title": "Big News", "snippet": "Details here"}])
     return calls
@@ -125,3 +125,13 @@ def test_schedule_voice_sample_copied_to_story(Session, fake_ai):
     story_id = scheduler.run_schedule({}, Session, sid, NOW)
     with Session() as s:
         assert s.get(db.Story, story_id).voice_sample == "/voices/anna.wav"
+
+
+def test_schedule_image_style_copied_to_story(Session, fake_ai):
+    sid = _schedule(Session)
+    with Session() as s:
+        s.get(db.Schedule, sid).image_style = "cartoon"
+        s.commit()
+    story_id = scheduler.run_schedule({}, Session, sid, NOW)
+    with Session() as s:
+        assert s.get(db.Story, story_id).image_style == "cartoon"

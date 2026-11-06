@@ -5,7 +5,10 @@ from desktop.services import story_ai
 
 def create_story(title, content, style, talking_style, aspect_ratio, cfg, yt=None, **extra) -> int:
     """Split into scenes (AI image prompts) and save. Blocking: call off the GUI thread."""
-    scenes = story_ai.split_scenes(content, style, talking_style, cfg)
+    from desktop.pipeline.images import resolve_style
+    image_style = extra.get("image_style") or "auto"
+    scenes = story_ai.split_scenes(content, style, talking_style, cfg,
+                                   image_style=resolve_style(image_style, style))
     if not scenes:
         raise story_ai.StoryAIError("The script has no sentences long enough to become scenes.")
     yt = yt or {}

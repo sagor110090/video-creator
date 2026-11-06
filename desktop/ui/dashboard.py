@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFrame, QGridLayout, QHB
                                QVBoxLayout, QWidget)
 
 from desktop.core import db, paths, settings
+from desktop.pipeline.images import IMAGE_STYLES
 from desktop.services import story_ai
 from desktop.services.stories import create_story
 from desktop.ui import icons
@@ -202,8 +203,14 @@ class DashboardPage(QWidget):
         fmt_voice = QGridLayout()
         fmt_voice.setHorizontalSpacing(12)
         fmt_voice.setVerticalSpacing(6)
-        fmt_voice.addLayout(_field_label("film", "Format", "#60a5fa"), 0, 0)
+        fmt_voice.addLayout(_field_label("image", "Image style", "#60a5fa"), 0, 0)
         fmt_voice.addLayout(_field_label("mic", "Voice", "#60a5fa"), 0, 1)
+        self.image_style = QComboBox()
+        for key, st in IMAGE_STYLES.items():
+            self.image_style.addItem(st["label"], key)
+        self.image_style.setToolTip("What the scene images should look like. Cartoon, Anime and 3D are drawn by AI.")
+        fmt_voice.addWidget(self.image_style, 1, 0)
+        fmt_voice.addLayout(_field_label("film", "Format", "#60a5fa"), 2, 0)
         fmt = QHBoxLayout()
         fmt.setSpacing(8)
         self.landscape = QPushButton(" Landscape 16:9", objectName="pill", checkable=True, checked=True)
@@ -217,7 +224,7 @@ class DashboardPage(QWidget):
             group.addButton(b)
             fmt.addWidget(b)
         fmt.addStretch()
-        fmt_voice.addLayout(fmt, 1, 0)
+        fmt_voice.addLayout(fmt, 3, 0, 1, 2)
         self.voice = VoicePicker()
         self.voice.setToolTip("Default uses the voice sample from Settings")
         fmt_voice.addWidget(self.voice, 1, 1)
@@ -352,7 +359,8 @@ class DashboardPage(QWidget):
         self._busy(self.create_btn, "Planning scenes…")
         run_async(create_story, self.title.text().strip() or self.topic.text().strip(), content,
                   self.style.currentData(), self.talking.currentData(), self.aspect_ratio, settings.load(), self._yt,
-                  voice_sample=self.voice.value(), on_done=self._created, on_error=self._create_failed)
+                  voice_sample=self.voice.value(), image_style=self.image_style.currentData(),
+                  on_done=self._created, on_error=self._create_failed)
 
     def _created(self, story_id):
         self.create_btn.setEnabled(True)

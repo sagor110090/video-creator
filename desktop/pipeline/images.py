@@ -31,6 +31,49 @@ STOPWORDS = {
 }
 
 
+# Image styles. stock_words go in front of stock-photo searches; ai_suffix describes the look to the AI
+# generator; prefer_ai puts AI generation first (stock sites rarely have a cartoon of a specific scene);
+# guidance tells the AI writer what kind of image search phrases to produce.
+IMAGE_STYLES = {
+    "auto": {"label": "Auto (match the story)"},
+    "photo": {"label": "Realistic photos", "openverse_category": "photograph",
+              "ai_suffix": "realistic photo, natural lighting",
+              "guidance": "Real-world photographs of real places, objects and people."},
+    "cartoon": {"label": "Cartoon / kids", "prefer_ai": True, "stock_words": "cartoon",
+                "pixabay_type": "illustration", "openverse_category": "illustration",
+                "ai_suffix": "cute colorful cartoon illustration for children, storybook style, simple shapes, bright",
+                "guidance": "Cute, friendly cartoon scenes for kids: smiling characters, animals, bright simple "
+                            "places. Nothing scary or violent."},
+    "anime": {"label": "Anime", "prefer_ai": True, "stock_words": "anime",
+              "pixabay_type": "illustration", "openverse_category": "illustration",
+              "ai_suffix": "anime style illustration, vibrant colors, detailed background",
+              "guidance": "Anime-style scenes with expressive characters and detailed backgrounds."},
+    "3d": {"label": "3D animation", "prefer_ai": True, "stock_words": "3d render",
+           "pixabay_type": "illustration",
+           "ai_suffix": "3D animated movie still, soft lighting, expressive cute characters, high detail",
+           "guidance": "Scenes like a 3D animated family movie: expressive characters, soft lighting."},
+    "science": {"label": "Science & tech", "stock_words": "science",
+                "ai_suffix": "scientific illustration, detailed, educational, clean background",
+                "guidance": "Scientific visuals: labs, microscopes, space, cells, molecules, technology, "
+                            "nature close-ups, diagrams."},
+    "fashion": {"label": "Models & fashion", "stock_words": "fashion model", "openverse_category": "photograph",
+                "ai_suffix": "fashion photography, professional model, studio lighting, editorial",
+                "guidance": "Fashion and model photography: people posing, outfits, runway, studio portraits."},
+    "cinematic": {"label": "Cinematic", "openverse_category": "photograph",
+                  "ai_suffix": "cinematic film still, dramatic lighting, shallow depth of field",
+                  "guidance": "Dramatic, movie-like shots with strong lighting and mood."},
+}
+AI_SOURCES = {"pollinations"}
+
+
+def resolve_style(image_style: str | None, content_style: str | None = None) -> str:
+    """'auto' picks a style from the content style (science shorts get science images)."""
+    style = image_style if image_style in IMAGE_STYLES else "auto"
+    if style == "auto" and content_style == "science_short":
+        return "science"
+    return style
+
+
 @dataclass
 class ImageHit:
     source: str
@@ -95,7 +138,7 @@ def _pixabay(q, out, ar, cfg):
         return None
     min_w, min_h = (1280, 720) if ar == "16:9" else (720, 1280)
     res = requests.get("https://pixabay.com/api/", timeout=10, params={
-        "key": key, "q": q[:100], "image_type": "photo", "safesearch": "true", "per_page": 3,
+        "key": key, "q": q[:100], "image_type": cfg.get("_pixabay_type", "photo"), "safesearch": "true", "per_page": 3,
         "orientation": "horizontal" if ar == "16:9" else "vertical", "min_width": min_w, "min_height": min_h})
     for hit in (res.json().get("hits", []) if res.status_code == 200 else []):
         if _fetch(hit.get("largeImageURL"), out):
@@ -117,6 +160,8 @@ def _openverse_once(q, out, ar, cfg):
     params = {"q": q, "license": cfg.get("openverse_licenses", "cc0,pdm"),
               "aspect_ratio": "wide" if ar == "16:9" else "tall",
               "size": "large", "mature": "false", "page_size": 10}
+    if cfg.get("_openverse_category"):
+        params["category"] = cfg["_openverse_category"]
     api = "https://api.openverse.org/v1/images/"
     res = requests.get(api, params=params, headers=HEADERS, timeout=15)
     results = res.json().get("results", []) if res.status_code == 200 else []
@@ -142,7 +187,8 @@ def _pollinations(q, out, ar, cfg):
     headers = dict(HEADERS)
     if cfg.get("pollinations_token"):
         headers["Authorization"] = f"Bearer {cfg['pollinations_token']}"
-    url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(q + ', cinematic photo, natural lighting')}"
+    suffix = cfg.get("_ai_suffix") or "cinematic photo, natural lighting"
+    url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(q + ', ' + suffix)}"
     params = {"width": w, "height": h, "model": "flux", "nologo": "true", "seed": random.randint(1, 10**6)}
     for attempt in range(2):
         res = requests.get(url, params=params, headers=headers, timeout=90)
@@ -174,13 +220,22 @@ SOURCES = {"pexels": _pexels, "pixabay": _pixabay, "openverse": _openverse,
            "placeholder": lambda q, out, ar, cfg: placeholder(out, ar)}
 
 
+def _source_order(cfg: dict) -> list[str]:
+    names = [s.strip().lower() for s in cfg.get("image_sources", "").split(",") if s.strip()]
+    if cfg.get("_prefer_ai"):
+        names = [n for n in names if n in AI_SOURCES] + [n for n in names if n not in AI_SOURCES]
+    return names
+
+
 def _try_sources(query: str, out: Path, ar: str, cfg: dict) -> ImageHit | None:
-    for name in [s.strip().lower() for s in cfg.get("image_sources", "").split(",") if s.strip()]:
+    stock_words = cfg.get("_stock_words")
+    for name in _source_order(cfg):
         fn = SOURCES.get(name)
         if fn is None:
             continue
+        q = query if name in AI_SOURCES or not stock_words else f"{stock_words} {query}"
         try:
-            hit = fn(query, out, ar, cfg)
+            hit = fn(q, out, ar, cfg)
             if hit:
                 return hit
         except Exception:
@@ -188,9 +243,14 @@ def _try_sources(query: str, out: Path, ar: str, cfg: dict) -> ImageHit | None:
     return None
 
 
-def fetch_scene_image(prompt: str, out, aspect_ratio: str, cfg: dict, previous_image=None) -> ImageHit:
+def fetch_scene_image(prompt: str, out, aspect_ratio: str, cfg: dict, previous_image=None,
+                      image_style: str = "auto") -> ImageHit:
     """Never raises: sources → simpler query → generic query → previous scene's image → placeholder."""
     out = Path(out)
+    st = IMAGE_STYLES.get(image_style, IMAGE_STYLES["auto"])
+    cfg = dict(cfg, _prefer_ai=st.get("prefer_ai", False), _stock_words=st.get("stock_words"),
+               _ai_suffix=st.get("ai_suffix"), _pixabay_type=st.get("pixabay_type", "photo"),
+               _openverse_category=st.get("openverse_category"))
     queries = [_clean_query(prompt), extract_keywords(prompt, 3), "cinematic background"]
     for q in dict.fromkeys(q for q in queries if q):
         hit = _try_sources(q, out, aspect_ratio, cfg)

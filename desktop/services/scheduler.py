@@ -26,8 +26,9 @@ def run_schedule(cfg, Session, schedule_id: int, now: datetime) -> int:
         sch = s.get(db.Schedule, schedule_id)
         sch.last_run_at, sch.last_error = now.date(), None
         s.commit()
-        topic, style, talking, ar, channel, sample = (sch.topic, sch.style, sch.talking_style or "none",
-                                                      sch.aspect_ratio, sch.channel_id, sch.voice_sample)
+        topic, style, talking, ar, channel, sample, img_style = (
+            sch.topic, sch.style, sch.talking_style or "none", sch.aspect_ratio, sch.channel_id,
+            sch.voice_sample, sch.image_style or "auto")
     try:
         prompt_topic = topic
         if style in NEWS_STYLES:
@@ -37,7 +38,7 @@ def run_schedule(cfg, Session, schedule_id: int, now: datetime) -> int:
         data = story_ai.generate_story(cfg, prompt_topic or "a random interesting story", style, ar, talking)
         return create_story(data.get("title") or topic, data["content"], style, talking, ar, cfg, yt=data,
                             schedule_id=schedule_id, channel_id=channel, publish_at=now,
-                            voice_sample=sample)
+                            voice_sample=sample, image_style=img_style)
     except Exception as e:
         with Session() as s:
             s.get(db.Schedule, schedule_id).last_error = str(e)

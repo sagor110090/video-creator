@@ -38,7 +38,8 @@ def _run_stage(scene, stage, story, cfg, engine, previous_image):
     if stage == "image":
         out = d / "image.jpg"
         hit = images.fetch_scene_image(scene.image_prompt or scene.narration, out, story.aspect_ratio, cfg,
-                                       previous_image=previous_image)
+                                       previous_image=previous_image,
+                                       image_style=images.resolve_style(story.image_style, story.style))
         scene.image_path, scene.image_source = str(out), hit.source
         scene.image_source_url, scene.image_license = hit.url, hit.license
         return {"source": hit.source, "license": hit.license, "url": hit.url}

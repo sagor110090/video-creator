@@ -82,3 +82,30 @@ def test_openverse_narrows_long_query(tmp_path):
 
 def test_extract_keywords():
     assert images.extract_keywords("So the old man walked to the sea", 3) == "old man walked"
+
+
+def test_cartoon_style_prefers_ai_with_style_words(tmp_path, monkeypatch):
+    seen = []
+
+    def fake(name):
+        def fn(q, out, ar, cfg):
+            seen.append((name, q, cfg.get("_ai_suffix"), cfg.get("_openverse_category"), cfg.get("_pixabay_type")))
+            return images.placeholder(out, ar) if name == "openverse" else None
+        return fn
+    for n in ("pexels", "pixabay", "openverse", "pollinations", "loremflickr"):
+        monkeypatch.setitem(images.SOURCES, n, fake(n))
+    cfg = {**CFG, "image_sources": "pexels,openverse,pollinations"}
+    images.fetch_scene_image("lighthouse on a cliff", tmp_path / "i.jpg", "16:9", cfg, image_style="cartoon")
+    names = [s[0] for s in seen]
+    assert names[:2] == ["pollinations", "pexels"]          # AI first for illustration styles
+    poll, pex, ov = seen[0], seen[1], seen[2]
+    assert "cartoon" in poll[2] and poll[1] == "lighthouse on a cliff"   # AI gets the style as a suffix
+    assert pex[1] == "cartoon lighthouse on a cliff"                     # stock search gets style words first
+    assert ov[3] == "illustration" and pex[4] == "illustration"
+
+
+def test_auto_style_resolves_from_content_style():
+    assert images.resolve_style("auto", "science_short") == "science"
+    assert images.resolve_style("auto", "story") == "auto"
+    assert images.resolve_style("cartoon", "science_short") == "cartoon"
+    assert images.resolve_style("nonsense", "story") == "auto"

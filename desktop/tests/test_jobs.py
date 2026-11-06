@@ -119,3 +119,18 @@ def test_default_voice_sample_comes_from_current_settings(Session, story_id, mon
     cfg = CFG | {"voice_engine": "chatterbox", "voice_sample": "/new-default.wav"}
     jobs.render_story(Session, story_id, lambda e: None, cfg, stale_engine)
     assert used == ["/new-default.wav", "/new-default.wav"]
+
+
+def test_render_uses_story_image_style(Session, story_id, monkeypatch):
+    styles = []
+    real = jobs.images.fetch_scene_image
+
+    def spy(prompt, out, ar, cfg, previous_image=None, image_style="auto"):
+        styles.append(image_style)
+        return real(prompt, out, ar, cfg, previous_image=previous_image, image_style=image_style)
+    monkeypatch.setattr(jobs.images, "fetch_scene_image", spy)
+    with Session() as s:
+        s.get(db.Story, story_id).image_style = "cartoon"
+        s.commit()
+    jobs.render_story(Session, story_id, lambda e: None, CFG, voice.StubEngine())
+    assert styles == ["cartoon", "cartoon"]

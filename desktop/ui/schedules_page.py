@@ -7,11 +7,12 @@ from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QComboBox, QForm
                                QTableWidgetItem, QTimeEdit, QVBoxLayout, QWidget)
 
 from desktop.core import db, settings, voices
+from desktop.pipeline.images import IMAGE_STYLES
 from desktop.services import scheduler, story_ai
 from desktop.ui.tasks import run_async
 from desktop.ui.voice_picker import VoicePicker
 
-COLUMNS = ["Topic", "Style", "Format", "Voice", "Daily at", "Channel", "Last run", "Status"]
+COLUMNS = ["Topic", "Style", "Images", "Format", "Voice", "Daily at", "Channel", "Last run", "Status"]
 
 
 class SchedulesPage(QWidget):
@@ -62,6 +63,10 @@ class SchedulesPage(QWidget):
         form.addRow("Topic", self.topic)
         form.addRow("Content style", self.style)
         form.addRow("Talking style", self.talking)
+        self.image_style = QComboBox()
+        for key, st in IMAGE_STYLES.items():
+            self.image_style.addItem(st["label"], key)
+        form.addRow("Image style", self.image_style)
         form.addRow("Format", fmt)
         self.voice = VoicePicker()
         form.addRow("Voice", self.voice)
@@ -93,6 +98,7 @@ class SchedulesPage(QWidget):
             for r, sch in enumerate(rows):
                 status = sch.status if not sch.last_error else f"error: {sch.last_error[:60]}"
                 values = [sch.topic, story_ai.STYLES.get(sch.style, sch.style),
+                          IMAGE_STYLES.get(sch.image_style or "auto", IMAGE_STYLES["auto"])["label"],
                           "Shorts" if sch.aspect_ratio == "9:16" else "16:9",
                           voices.display_name(sch.voice_sample) if sch.voice_sample else "Default",
                           sch.scheduled_time.strftime("%H:%M"), channels.get(sch.channel_id, "—"),
@@ -119,7 +125,7 @@ class SchedulesPage(QWidget):
                               aspect_ratio="9:16" if self.shorts.isChecked() else "16:9",
                               scheduled_time=datetime.strptime(t.toString("HH:mm"), "%H:%M").time(),
                               channel_id=self.channel.currentData(), voice_sample=self.voice.value(),
-                              status="active"))
+                              image_style=self.image_style.currentData(), status="active"))
             s.commit()
         self.topic.clear()
         self.message.setText("Schedule added.")

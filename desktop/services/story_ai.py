@@ -354,7 +354,11 @@ def clean_image_prompt(text: str) -> str:
     return clean if len(clean) >= 5 else re.sub(r"[?!.,;:\"']", "", text).strip()
 
 
-def generate_image_prompts(cfg, narrations: list[str]) -> list[str]:
+def generate_image_prompts(cfg, narrations: list[str], image_style: str = "auto") -> list[str]:
+    from desktop.pipeline.images import IMAGE_STYLES
+    style = IMAGE_STYLES.get(image_style, IMAGE_STYLES["auto"])
+    style_rule = (f"\n- VISUAL STYLE: {style['label']}. {style['guidance']} Describe each scene so it fits this style."
+                  if style.get("guidance") else "")
     out = []
     for start in range(0, len(narrations), 20):
         chunk = narrations[start:start + 20]
@@ -365,7 +369,7 @@ For each of the following narration segments, generate a precise, high-quality i
 - Focus on nouns, setting, and action.
 - REMOVE conversational filler (e.g. 'Imagine if', 'So', 'Basically').
 - If the text is abstract, provide a metaphorical visual (e.g. 'Stock market crash' -> 'Red graph arrow going down').
-- Output specific keywords (e.g. 'Golden retriever running grass' instead of 'A dog running').
+- Output specific keywords (e.g. 'Golden retriever running grass' instead of 'A dog running').{style_rule}
 
 INPUT NARRATIONS:
 {json.dumps(chunk, ensure_ascii=False)}
@@ -390,12 +394,15 @@ Example:
 
 
 def split_scenes(content: str, style: str = "story", talking_style: str = "none", cfg=None,
-                 max_scenes: int = 50) -> list[dict]:
+                 max_scenes: int = 50, image_style: str = "auto") -> list[dict]:
     """Sentences (>= 10 chars) become scenes; image prompts come from the AI, with a cleaned-text fallback."""
     text = re.sub(r"[\r\n]+", " ", content)
     sentences = [s.strip() for s in re.split(r"(?<=[.!?।])\s+", text) if len(s.strip()) >= 10][:max_scenes]
-    prompts = generate_image_prompts(cfg, sentences) if cfg and sentences else [clean_image_prompt(s) for s in sentences]
-    hint = STYLE_HINTS.get(style, "")
-    if not hint and talking_style and talking_style != "none":
-        hint = "person talking lifestyle"
+    prompts = (generate_image_prompts(cfg, sentences, image_style) if cfg and sentences
+               else [clean_image_prompt(s) for s in sentences])
+    hint = ""
+    if image_style in (None, "auto"):       # an explicit image style adds its own words at search time
+        hint = STYLE_HINTS.get(style, "")
+        if not hint and talking_style and talking_style != "none":
+            hint = "person talking lifestyle"
     return [{"narration": s, "image_prompt": f"{p}, {hint}" if hint else p} for s, p in zip(sentences, prompts)]

@@ -80,3 +80,19 @@ def test_news_unwraps_and_errors_return_empty():
 def test_topic_fallback():
     _reply("", status=500)
     assert story_ai.generate_topic(CFG, "", "science_short") == "Black Holes"
+
+
+@responses.activate
+def test_image_prompts_follow_image_style():
+    _reply({"0": "cute cartoon lighthouse"})
+    story_ai.generate_image_prompts(CFG, ["The lighthouse stood alone."], image_style="cartoon")
+    prompt = json.loads(responses.calls[0].request.body)["messages"][1]["content"]
+    assert "cartoon" in prompt.lower() and "kids" in prompt.lower()
+
+
+@responses.activate
+def test_split_scenes_with_image_style_skips_content_hint():
+    _reply({"0": "celebrity red carpet"})
+    scenes = story_ai.split_scenes("The star arrived at the gala tonight!", "hollywood_hype", "none", CFG,
+                                   image_style="fashion")
+    assert scenes[0]["image_prompt"] == "celebrity red carpet"   # style words are added at search time
