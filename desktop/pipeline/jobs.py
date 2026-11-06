@@ -13,6 +13,9 @@ Emit = Callable[[dict], None]
 
 def _story_event(emit, story, status):
     story.status = status
+    if status == "done":
+        from datetime import datetime
+        story.rendered_at = datetime.now()
     emit({"type": "story", "story_id": story.id, "status": status})
 
 

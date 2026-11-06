@@ -44,3 +44,19 @@ def test_second_engine_can_write(Session):
         c.execute(text("update stories set status='rendering'"))
     with Session() as s:
         assert s.query(db.Story).one().status == "rendering"
+
+
+def test_init_db_adds_missing_columns(data_dir):
+    import sqlite3
+    con = sqlite3.connect(paths.db_path())
+    con.execute("create table stories (id integer primary key, title varchar, content text not null, "
+                "status varchar not null default 'draft')")
+    con.execute("insert into stories (content) values ('old row')")
+    con.commit()
+    con.close()
+    db.reset_engine()
+    db.init_db()
+    cols = {r[1] for r in sqlite3.connect(paths.db_path()).execute("pragma table_info(stories)")}
+    assert {"uploaded_at", "rendered_at", "publish_at", "final_path"} <= cols
+    with db.Session() as s:
+        assert s.query(db.Story).one().content == "old row"

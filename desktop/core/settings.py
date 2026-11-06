@@ -17,6 +17,8 @@ DEFAULTS = {
     "voice_sample": "",
     "background_music": True,
     "render_preset": "slow",
+    "youtube_client_id": "",
+    "youtube_client_secret": "",
 }
 
 # Laravel .env key -> settings key

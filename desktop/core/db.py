@@ -25,6 +25,7 @@ class Channel(Base):
     access_token: Mapped[str] = mapped_column(Text, default="")
     refresh_token: Mapped[str | None] = mapped_column(Text)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime)
+    status: Mapped[str | None] = mapped_column(String, default="ok")   # ok | reconnect
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
@@ -64,6 +65,8 @@ class Story(Base):
     youtube_upload_status: Mapped[str | None] = mapped_column(String)
     youtube_error: Mapped[str | None] = mapped_column(Text)
     publish_at: Mapped[datetime | None] = mapped_column(DateTime)
+    uploaded_at: Mapped[datetime | None] = mapped_column(DateTime)
+    rendered_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
 
@@ -130,6 +133,21 @@ def engine():
 
 def init_db() -> None:
     Base.metadata.create_all(engine())
+    _add_missing_columns()
+
+
+def _add_missing_columns() -> None:
+    """Tiny forward-only migration: add columns that newer code defines but an older DB lacks."""
+    from sqlalchemy import inspect, text
+    eng = engine()
+    insp = inspect(eng)
+    with eng.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            existing = {c["name"] for c in insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name not in existing:
+                    ddl = col.type.compile(dialect=eng.dialect)
+                    conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {ddl}'))
 
 
 def reset_engine() -> None:
