@@ -1,5 +1,4 @@
 """Settings: API keys, image sources, voice and render options (saved to settings.json)."""
-import shutil
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, QUrl
@@ -7,7 +6,7 @@ from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout,
                                QLabel, QLineEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget)
 
-from desktop.core import paths, settings
+from desktop.core import settings, voices
 from desktop.ui import icons
 from desktop.ui.widgets import field, link, page_header, secret_edit, section
 
@@ -168,11 +167,9 @@ class SettingsPage(QWidget):
                                               "Audio (*.wav *.mp3 *.m4a)")
         if not path:
             return
-        dest = paths.data_dir() / "voice" / f"sample{Path(path).suffix.lower()}"
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy(path, dest)
+        dest = voices.add_sample(path)   # into the voice library; never overwrites another voice
         self._sample_path = str(dest)
-        self.voice_sample.setText(Path(path).name)
+        self.voice_sample.setText(dest.name)
 
     def _preview(self):
         if self._sample_path:

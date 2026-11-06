@@ -16,7 +16,6 @@ def worker_main(job_q, event_q, data_dir: str) -> None:
     db.reset_engine()
     db.init_db()
     emit = event_q.put
-    engine = voice.get_engine(settings.load())
     emit({"type": "worker_ready", "pid": os.getpid()})
     while True:
         job = job_q.get()
@@ -26,6 +25,7 @@ def worker_main(job_q, event_q, data_dir: str) -> None:
         emit({"type": "job_started", "job_id": job_id, "kind": kind, **kw})
         try:
             cfg = settings.load()  # re-read each job so Settings changes apply without restart
+            engine = voice.get_engine(cfg)  # cheap: the voice model itself stays loaded
             if kind == "render_story":
                 jobs.render_story(db.Session, kw["story_id"], emit, cfg, engine)
             elif kind == "redo_scene":

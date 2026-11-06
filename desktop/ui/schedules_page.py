@@ -6,14 +6,17 @@ from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QComboBox, QForm
                                QHeaderView, QLabel, QLineEdit, QPushButton, QRadioButton, QTableWidget,
                                QTableWidgetItem, QTimeEdit, QVBoxLayout, QWidget)
 
-from desktop.core import db, settings
+from desktop.core import db, settings, voices
 from desktop.services import scheduler, story_ai
 from desktop.ui.tasks import run_async
+from desktop.ui.voice_picker import VoicePicker
 
-COLUMNS = ["Topic", "Style", "Format", "Daily at", "Channel", "Last run", "Status"]
+COLUMNS = ["Topic", "Style", "Format", "Voice", "Daily at", "Channel", "Last run", "Status"]
 
 
 class SchedulesPage(QWidget):
+    COLUMNS = COLUMNS
+
     def __init__(self, bridge):
         super().__init__(objectName="page")
         self.bridge = bridge
@@ -60,6 +63,8 @@ class SchedulesPage(QWidget):
         form.addRow("Content style", self.style)
         form.addRow("Talking style", self.talking)
         form.addRow("Format", fmt)
+        self.voice = VoicePicker()
+        form.addRow("Voice", self.voice)
         form.addRow("Every day at", self.time)
         form.addRow("Upload to", self.channel)
         form.addRow("", self.add_btn)
@@ -76,6 +81,7 @@ class SchedulesPage(QWidget):
         root.addWidget(card)
 
     def refresh(self):
+        self.voice.reload()
         self.channel.clear()
         self.channel.addItem("Don't upload", None)
         with db.Session() as s:
@@ -88,12 +94,13 @@ class SchedulesPage(QWidget):
                 status = sch.status if not sch.last_error else f"error: {sch.last_error[:60]}"
                 values = [sch.topic, story_ai.STYLES.get(sch.style, sch.style),
                           "Shorts" if sch.aspect_ratio == "9:16" else "16:9",
+                          voices.display_name(sch.voice_sample) if sch.voice_sample else "Default",
                           sch.scheduled_time.strftime("%H:%M"), channels.get(sch.channel_id, "—"),
                           str(sch.last_run_at or "never"), status]
                 for c, v in enumerate(values):
                     item = QTableWidgetItem(v)
                     item.setData(Qt.UserRole, sch.id)
-                    if c == 6 and sch.last_error:
+                    if c == len(COLUMNS) - 1 and sch.last_error:
                         item.setToolTip(sch.last_error)
                     self.table.setItem(r, c, item)
 
@@ -111,7 +118,8 @@ class SchedulesPage(QWidget):
             s.add(db.Schedule(topic=topic, style=self.style.currentData(), talking_style=self.talking.currentData(),
                               aspect_ratio="9:16" if self.shorts.isChecked() else "16:9",
                               scheduled_time=datetime.strptime(t.toString("HH:mm"), "%H:%M").time(),
-                              channel_id=self.channel.currentData(), status="active"))
+                              channel_id=self.channel.currentData(), voice_sample=self.voice.value(),
+                              status="active"))
             s.commit()
         self.topic.clear()
         self.message.setText("Schedule added.")

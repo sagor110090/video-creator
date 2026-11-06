@@ -89,6 +89,13 @@ class EdgeEngine:
             Path(tmp).unlink(missing_ok=True)
 
 
+def engine_for(engine, sample_path):
+    """The engine to use for one story: Chatterbox clones `sample_path`; other engines don't clone."""
+    if getattr(engine, "name", "") == "chatterbox":
+        return ChatterboxEngine(sample_path)   # cheap: the model is loaded once per process
+    return engine
+
+
 def get_engine(cfg: dict):
     kind = cfg.get("voice_engine", "chatterbox")
     if kind == "stub":

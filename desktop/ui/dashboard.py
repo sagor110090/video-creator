@@ -13,6 +13,7 @@ from desktop.services.stories import create_story
 from desktop.ui import icons
 from desktop.ui.style import ACCENT, MUTED, badge_style, glow
 from desktop.ui.tasks import run_async
+from desktop.ui.voice_picker import VoicePicker
 
 SCRIPT_LIMIT = 5000
 THUMB = 64
@@ -198,8 +199,11 @@ class DashboardPage(QWidget):
         form.addSpacing(4)
         form.addLayout(grid)
 
-        form.addSpacing(4)
-        form.addLayout(_field_label("film", "Format", "#60a5fa"))
+        fmt_voice = QGridLayout()
+        fmt_voice.setHorizontalSpacing(12)
+        fmt_voice.setVerticalSpacing(6)
+        fmt_voice.addLayout(_field_label("film", "Format", "#60a5fa"), 0, 0)
+        fmt_voice.addLayout(_field_label("mic", "Voice", "#60a5fa"), 0, 1)
         fmt = QHBoxLayout()
         fmt.setSpacing(8)
         self.landscape = QPushButton(" Landscape 16:9", objectName="pill", checkable=True, checked=True)
@@ -213,7 +217,14 @@ class DashboardPage(QWidget):
             group.addButton(b)
             fmt.addWidget(b)
         fmt.addStretch()
-        form.addLayout(fmt)
+        fmt_voice.addLayout(fmt, 1, 0)
+        self.voice = VoicePicker()
+        self.voice.setToolTip("Default uses the voice sample from Settings")
+        fmt_voice.addWidget(self.voice, 1, 1)
+        fmt_voice.setColumnStretch(0, 1)
+        fmt_voice.setColumnStretch(1, 1)
+        form.addSpacing(4)
+        form.addLayout(fmt_voice)
 
         form.addSpacing(4)
         form.addLayout(_field_label("pencil", "Title", "#60a5fa"))
@@ -266,6 +277,7 @@ class DashboardPage(QWidget):
 
     # ------------------------------------------------------------ list
     def refresh(self):
+        self.voice.reload()   # the Settings default may have changed
         current = self.stories.currentItem().data(Qt.UserRole) if self.stories.currentItem() else None
         self.stories.clear()
         with db.Session() as s:
@@ -340,7 +352,7 @@ class DashboardPage(QWidget):
         self._busy(self.create_btn, "Planning scenes…")
         run_async(create_story, self.title.text().strip() or self.topic.text().strip(), content,
                   self.style.currentData(), self.talking.currentData(), self.aspect_ratio, settings.load(), self._yt,
-                  on_done=self._created, on_error=self._create_failed)
+                  voice_sample=self.voice.value(), on_done=self._created, on_error=self._create_failed)
 
     def _created(self, story_id):
         self.create_btn.setEnabled(True)

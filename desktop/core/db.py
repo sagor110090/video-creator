@@ -41,6 +41,7 @@ class Schedule(Base):
     last_run_at = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String, default="active")
     last_error: Mapped[str | None] = mapped_column(Text)
+    voice_sample: Mapped[str | None] = mapped_column(String)   # None = Settings default
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
@@ -52,6 +53,7 @@ class Story(Base):
     style: Mapped[str] = mapped_column(String, default="story")
     talking_style: Mapped[str | None] = mapped_column(String)
     aspect_ratio: Mapped[str] = mapped_column(String, default="16:9")
+    voice_sample: Mapped[str | None] = mapped_column(String)   # None = Settings default
     status: Mapped[str] = mapped_column(String, default="draft")
     error: Mapped[str | None] = mapped_column(Text)
     final_path: Mapped[str | None] = mapped_column(String)

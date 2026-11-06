@@ -104,6 +104,8 @@ def _finish(s, emit, story, cfg, failed: int):
 def render_story(Session, story_id: int, emit: Emit, cfg: dict, engine) -> None:
     with Session() as s:
         story = s.get(db.Story, story_id)
+        # the story's own voice sample, else the current Settings default
+        engine = voice.engine_for(engine, story.voice_sample or cfg.get("voice_sample"))
         _story_event(emit, story, "rendering")
         story.error = None
         s.commit()

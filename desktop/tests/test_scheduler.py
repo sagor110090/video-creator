@@ -115,3 +115,13 @@ def test_stats(Session):
     assert len(rows) == 30 and rows[0]["date"] == NOW.date()
     assert (rows[0]["created"], rows[0]["rendered"], rows[0]["uploaded"]) == (1, 1, 1)
     assert rows[1]["created"] == 1
+
+
+def test_schedule_voice_sample_copied_to_story(Session, fake_ai):
+    sid = _schedule(Session)
+    with Session() as s:
+        s.get(db.Schedule, sid).voice_sample = "/voices/anna.wav"
+        s.commit()
+    story_id = scheduler.run_schedule({}, Session, sid, NOW)
+    with Session() as s:
+        assert s.get(db.Story, story_id).voice_sample == "/voices/anna.wav"
