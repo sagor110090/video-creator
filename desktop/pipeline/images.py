@@ -255,6 +255,9 @@ def _gemini(q, out, ar, cfg):
             msg = res.json().get("error", {}).get("message") or res.text[:200]
         except ValueError:
             msg = res.text[:200]
+        if res.status_code == 429 and "limit: 0" in msg and "free tier" in msg.lower():
+            raise GeminiError("this Google account is on the free tier, which allows no image generation. "
+                              "Enable billing for the key's project in Google AI Studio")
         raise GeminiError(f"HTTP {res.status_code}: {msg}")
     data = _find_image_b64(res.json())
     if not data:

@@ -161,3 +161,13 @@ def test_free_provider_never_calls_gemini(tmp_path, monkeypatch):
     cfg = {**CFG, "image_provider": "free", "gemini_api_key": "g-key", "image_sources": "placeholder"}
     images.fetch_scene_image("x", tmp_path / "i.jpg", "16:9", cfg, image_style="cartoon")
     assert called == []
+
+
+@responses.activate
+def test_gemini_free_tier_message_is_plain(tmp_path):
+    responses.add(responses.POST, GEMINI, status=429, json={"error": {
+        "message": "Rate limit exceeded for model gemini-nano-banana-2.1 (limit: 0 requests per day on Free Tier). "
+                   "Please upgrade your tier at https://ai.dev/rate-limit.", "code": "too_many_requests"}})
+    cfg = {**CFG, "image_provider": "gemini", "gemini_api_key": "k", "image_sources": "placeholder"}
+    hit = images.fetch_scene_image("x", tmp_path / "i.jpg", "16:9", cfg)
+    assert "billing" in hit.note.lower() and "free tier" in hit.note.lower()
