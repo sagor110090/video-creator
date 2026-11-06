@@ -104,6 +104,16 @@ def _pixabay(q, out, ar, cfg):
 
 
 def _openverse(q, out, ar, cfg):
+    """Openverse matches every word, so long queries often return nothing: narrow 5 -> 3 -> 2 words."""
+    words = q.split()
+    for n in dict.fromkeys(x for x in (len(words), 3, 2) if 0 < x <= len(words)):
+        hit = _openverse_once(" ".join(words[:n]), out, ar, cfg)
+        if hit:
+            return hit
+    return None
+
+
+def _openverse_once(q, out, ar, cfg):
     params = {"q": q, "license": cfg.get("openverse_licenses", "cc0,pdm"),
               "aspect_ratio": "wide" if ar == "16:9" else "tall",
               "size": "large", "mature": "false", "page_size": 10}

@@ -63,5 +63,22 @@ def test_placeholder_only_source_makes_no_requests(tmp_path):
     assert hit.source == "placeholder"
 
 
+@responses.activate
+def test_openverse_narrows_long_query(tmp_path):
+    def handler(req):
+        q = req.params["q"]
+        if len(q.split()) > 3:
+            return (200, {}, '{"results": []}')
+        return (200, {}, '{"results": [{"url": "https://img.example/b.jpg", "width": 1600, "license": "pdm"}]}')
+    responses.add_callback(responses.GET, re.compile(r"https://api\.openverse\.org/v1/images/.*"), callback=handler)
+    responses.add(responses.GET, "https://img.example/b.jpg", body=_jpeg())
+    # Pollinations accepts any prompt; Openverse is earlier in the order so it must still win.
+    responses.add(responses.GET, re.compile(r"https://image\.pollinations\.ai/.*"), body=_jpeg())
+    cfg = {**CFG, "image_sources": "openverse,pollinations"}
+    hit = images.fetch_scene_image("old lighthouse stood alone rocky", tmp_path / "i.jpg", "16:9", cfg)
+    assert hit.source == "openverse"
+    assert not any("pollinations" in c.request.url for c in responses.calls)
+
+
 def test_extract_keywords():
     assert images.extract_keywords("So the old man walked to the sea", 3) == "old man walked"
