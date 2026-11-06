@@ -2,74 +2,136 @@
 import shutil
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import QSize, Qt, QUrl
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel,
-                               QLineEdit, QPushButton, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout,
+                               QLabel, QLineEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget)
 
 from desktop.core import paths, settings
+from desktop.ui import icons
+from desktop.ui.widgets import field, link, page_header, secret_edit, section
 
-KEY_FIELDS = [("deepseek_api_key", "DeepSeek API key"), ("groq_api_key", "Groq API key"),
-              ("pexels_api_key", "Pexels API key (free)"), ("pixabay_api_key", "Pixabay API key (free)"),
-              ("pollinations_token", "Pollinations token (optional)"),
-              ("youtube_client_id", "YouTube OAuth client ID"), ("youtube_client_secret", "YouTube OAuth client secret")]
+QUALITY = [("Best", "slow", "Sharpest, slowest"), ("Balanced", "medium", "Good for most videos"),
+           ("Fast preview", "veryfast", "Quick drafts")]
 
 
 class SettingsPage(QWidget):
     def __init__(self):
         super().__init__(objectName="page")
-        card = QFrame(objectName="card")
-        form = QFormLayout(card)
-        form.setLabelAlignment(Qt.AlignRight)
-        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        self.fields: dict[str, QLineEdit] = {}
 
+        # ---- AI writer
+        ai, ai_l = section("sparkles", "AI writer", "Writes scripts, image searches and YouTube titles.", "#c084fc")
         self.provider = QComboBox()
         self.provider.addItem("DeepSeek", "deepseek")
         self.provider.addItem("Groq", "groq")
-        form.addRow("AI writer", self.provider)
-        self.fields = {}
-        for key, label in KEY_FIELDS:
-            f = QLineEdit(echoMode=QLineEdit.Normal if key == "youtube_client_id" else QLineEdit.Password)
-            self.fields[key] = f
-            form.addRow(label, f)
-        self.image_sources = QLineEdit()
-        self.image_sources.setToolTip("Tried in order: pexels, pixabay, openverse, pollinations, loremflickr")
-        form.addRow("Image source order", self.image_sources)
+        ai_l.addLayout(field("Provider", self.provider))
+        self.fields["deepseek_api_key"] = secret_edit("sk-…")
+        ai_l.addLayout(field("DeepSeek API key", self.fields["deepseek_api_key"],
+                             link("https://platform.deepseek.com/api_keys", "Get a DeepSeek key")))
+        self.fields["groq_api_key"] = secret_edit("gsk_…")
+        ai_l.addLayout(field("Groq API key", self.fields["groq_api_key"],
+                             link("https://console.groq.com/keys", "Get a free Groq key")))
+        ai_l.addStretch()
 
+        # ---- Images
+        img, img_l = section("image", "Images", "Free sources, tried in order until one has a match.")
+        self.fields["pexels_api_key"] = secret_edit("Optional")
+        img_l.addLayout(field("Pexels API key", self.fields["pexels_api_key"],
+                              link("https://www.pexels.com/api/", "Free key") + " · best stock photos"))
+        self.fields["pixabay_api_key"] = secret_edit("Optional")
+        img_l.addLayout(field("Pixabay API key", self.fields["pixabay_api_key"],
+                              link("https://pixabay.com/api/docs/", "Free key") + " · no attribution needed"))
+        self.fields["pollinations_token"] = secret_edit("Optional")
+        img_l.addLayout(field("Pollinations token", self.fields["pollinations_token"],
+                              link("https://auth.pollinations.ai", "Free token") + " · removes the AI-image logo"))
+        self.image_sources = QLineEdit()
+        img_l.addLayout(field("Source order", self.image_sources,
+                              "Comma-separated; the first source with a match wins. Sources without a key are skipped."))
+
+        # ---- Voice
+        voice, voice_l = section("mic", "Voice", "Narration for every scene.")
         self.voice_engine = QComboBox()
         self.voice_engine.addItem("Chatterbox — clone my voice", "chatterbox")
-        self.voice_engine.addItem("Microsoft Edge voices (fast, no cloning)", "edge")
-        form.addRow("Voice", self.voice_engine)
-        sample_row = QHBoxLayout()
-        self.voice_sample = QLabel(objectName="muted")
+        self.voice_engine.addItem("Microsoft Edge voices — fast, no cloning", "edge")
+        voice_l.addLayout(field("Engine", self.voice_engine))
+        sample_box = QFrame(objectName="storycard")
+        sample_box.setAttribute(Qt.WA_StyledBackground, True)
+        sb = QHBoxLayout(sample_box)
+        sb.setContentsMargins(12, 8, 8, 8)
+        self.preview_btn = QPushButton(fixedSize=QSize(36, 36), clicked=self._preview, toolTip="Play sample")
+        self.preview_btn.setIcon(icons.icon("play", "#60a5fa", 16))
+        self.voice_sample = QLabel(objectName="cardTitle")
+        sample_text = QVBoxLayout()
+        sample_text.setSpacing(0)
+        sample_text.addWidget(self.voice_sample)
+        sample_text.addWidget(QLabel("10–20 s of clear speech works best", objectName="cardMeta"))
         pick = QPushButton("Choose…", clicked=self._pick_sample)
-        self.preview_btn = QPushButton("▶", fixedWidth=36, clicked=self._preview)
-        sample_row.addWidget(self.voice_sample, 1)
-        sample_row.addWidget(pick)
-        sample_row.addWidget(self.preview_btn)
-        form.addRow("Voice sample", sample_row)
+        sb.addWidget(self.preview_btn)
+        sb.addLayout(sample_text, 1)
+        sb.addWidget(pick)
+        voice_l.addWidget(QLabel("Voice sample", objectName="fieldLabel"))
+        voice_l.addWidget(sample_box)
+        voice_l.addStretch()
 
+        # ---- Video
+        video, video_l = section("film", "Video", "How the final video is put together.")
         self.music = QCheckBox("Add background music")
-        form.addRow("", self.music)
-        self.quality = QComboBox()
-        for label, preset in [("Best (slow)", "slow"), ("Balanced", "medium"), ("Fast preview", "veryfast")]:
-            self.quality.addItem(label, preset)
-        form.addRow("Render quality", self.quality)
+        video_l.addWidget(self.music)
+        video_l.addWidget(QLabel("Render quality", objectName="fieldLabel"))
+        q_row = QHBoxLayout()
+        self.quality_group = QButtonGroup(self)
+        self.quality_buttons = {}
+        for label, preset, tip in QUALITY:
+            b = QPushButton(label, objectName="pill", checkable=True, toolTip=tip)
+            b.setCursor(Qt.PointingHandCursor)
+            self.quality_group.addButton(b)
+            self.quality_buttons[preset] = b
+            q_row.addWidget(b)
+        q_row.addStretch()
+        video_l.addLayout(q_row)
+        video_l.addStretch()
 
+        # ---- YouTube
+        yt, yt_l = section("youtube", "YouTube", "OAuth client for connecting channels.", "#f87171")
+        self.fields["youtube_client_id"] = QLineEdit(placeholderText="….apps.googleusercontent.com")
+        yt_l.addLayout(field("Client ID", self.fields["youtube_client_id"]))
+        self.fields["youtube_client_secret"] = secret_edit("GOCSPX-…")
+        yt_l.addLayout(field("Client secret", self.fields["youtube_client_secret"],
+                             "Create one in " + link("https://console.cloud.google.com/apis/credentials",
+                                                     "Google Cloud → Credentials") +
+                             " with application type <b>Desktop app</b>."))
+        yt_l.addStretch()
+
+        grid = QGridLayout()
+        grid.setSpacing(18)
+        grid.addWidget(ai, 0, 0)
+        grid.addWidget(img, 0, 1)
+        grid.addWidget(voice, 1, 0)
+        grid.addWidget(video, 1, 1)
+        grid.addWidget(yt, 2, 0, 1, 2)
+        inner = QWidget(objectName="formBody")
+        il = QVBoxLayout(inner)
+        il.setContentsMargins(4, 4, 12, 4)
+        il.addLayout(grid)
+        il.addStretch()
+        scroll = QScrollArea(widgetResizable=True, frameShape=QFrame.NoFrame)
+        scroll.setWidget(inner)
+
+        head = page_header("settings", "Settings", "Keys and preferences are stored only on this Mac.")
         self.saved = QLabel(objectName="muted")
-        self.save_btn = QPushButton("Save", objectName="primary", clicked=self.save)
-        bottom = QHBoxLayout()
-        bottom.addWidget(self.saved)
-        bottom.addStretch()
-        bottom.addWidget(self.save_btn)
+        self.save_btn = QPushButton(" Save changes", objectName="primary", clicked=self.save)
+        self.save_btn.setIcon(icons.icon("save", "#ffffff", 16))
+        self.save_btn.setCursor(Qt.PointingHandCursor)
+        head.addWidget(self.saved)
+        head.addWidget(self.save_btn, alignment=Qt.AlignTop)
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(24, 20, 24, 20)
-        root.addWidget(QLabel("Settings", objectName="h1"))
-        card.setMaximumWidth(820)
-        root.addWidget(card)
-        root.addLayout(bottom)
-        root.addStretch()
+        root.setContentsMargins(4, 4, 4, 4)
+        root.setSpacing(14)
+        root.addLayout(head)
+        root.addWidget(scroll, 1)
+
         self._player = QMediaPlayer(self)
         self._out = QAudioOutput(self)
         self._player.setAudioOutput(self._out)
@@ -83,9 +145,9 @@ class SettingsPage(QWidget):
         self.image_sources.setText(cfg["image_sources"])
         self.voice_engine.setCurrentIndex(max(0, self.voice_engine.findData(cfg["voice_engine"])))
         self._sample_path = cfg.get("voice_sample", "")
-        self.voice_sample.setText(Path(self._sample_path).name if self._sample_path else "none — default voice")
+        self.voice_sample.setText(Path(self._sample_path).name if self._sample_path else "No sample — default voice")
         self.music.setChecked(bool(cfg["background_music"]))
-        self.quality.setCurrentIndex(max(0, self.quality.findData(cfg["render_preset"])))
+        self.quality_buttons.get(cfg["render_preset"], self.quality_buttons["slow"]).setChecked(True)
         self.saved.clear()
 
     def save(self):
@@ -97,9 +159,9 @@ class SettingsPage(QWidget):
         cfg["voice_engine"] = self.voice_engine.currentData()
         cfg["voice_sample"] = self._sample_path
         cfg["background_music"] = self.music.isChecked()
-        cfg["render_preset"] = self.quality.currentData()
+        cfg["render_preset"] = next((p for p, b in self.quality_buttons.items() if b.isChecked()), "slow")
         settings.save(cfg)
-        self.saved.setText("Saved. New settings apply to the next render.")
+        self.saved.setText("Saved · applies to the next render")
 
     def _pick_sample(self):
         path, _ = QFileDialog.getOpenFileName(self, "Voice sample (10–20 s of clear speech)", str(Path.home()),

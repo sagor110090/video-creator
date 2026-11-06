@@ -1,0 +1,78 @@
+"""Shared building blocks for the Dark Blue pages."""
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QLineEdit, QVBoxLayout
+
+from desktop.ui import icons
+from desktop.ui.style import MUTED, glow
+
+
+def icon_label(name, color="#60a5fa", size=16):
+    lbl = QLabel()
+    lbl.setPixmap(icons.pixmap(name, color, size))
+    lbl.setFixedSize(size + 2, size + 2)
+    return lbl
+
+
+def page_header(icon_name, title, subtitle="", color="#dbe4ff"):
+    """Big page title row with an icon and a muted subtitle."""
+    row = QHBoxLayout()
+    row.setSpacing(12)
+    row.addWidget(icon_label(icon_name, color, 26), alignment=Qt.AlignTop)
+    text = QVBoxLayout()
+    text.setSpacing(2)
+    text.addWidget(QLabel(title, objectName="h1"))
+    if subtitle:
+        sub = QLabel(subtitle, objectName="muted", wordWrap=True)
+        text.addWidget(sub)
+    row.addLayout(text, 1)
+    return row
+
+
+def section(icon_name, title, subtitle="", color="#60a5fa", glowing=True):
+    """A glowing panel with an icon title. Returns (frame, body_layout)."""
+    frame = QFrame(objectName="panel")
+    frame.setAttribute(Qt.WA_StyledBackground, True)
+    lay = QVBoxLayout(frame)
+    lay.setContentsMargins(18, 16, 18, 18)
+    lay.setSpacing(10)
+    head = QHBoxLayout()
+    head.setSpacing(10)
+    head.addWidget(icon_label(icon_name, color, 20))
+    t = QVBoxLayout()
+    t.setSpacing(0)
+    t.addWidget(QLabel(title, objectName="panelTitle"))
+    if subtitle:
+        t.addWidget(QLabel(subtitle, objectName="muted", wordWrap=True))
+    head.addLayout(t, 1)
+    lay.addLayout(head)
+    if glowing:
+        glow(frame, radius=26, alpha=90)
+    return frame, lay
+
+
+def field(label, widget, hint=""):
+    """Label above a field, optional muted hint (may contain links) below it."""
+    box = QVBoxLayout()
+    box.setSpacing(5)
+    box.addWidget(QLabel(label, objectName="fieldLabel"))
+    box.addWidget(widget)
+    if hint:
+        h = QLabel(hint, objectName="muted", wordWrap=True, openExternalLinks=True)
+        box.addWidget(h)
+    return box
+
+
+def secret_edit(placeholder="") -> QLineEdit:
+    """Password-style line edit with an eye toggle to reveal the value."""
+    e = QLineEdit(echoMode=QLineEdit.Password, placeholderText=placeholder)
+    action = e.addAction(icons.icon("eye", MUTED, 16), QLineEdit.TrailingPosition)
+    action.setToolTip("Show / hide")
+
+    def toggle():
+        e.setEchoMode(QLineEdit.Normal if e.echoMode() == QLineEdit.Password else QLineEdit.Password)
+    action.triggered.connect(toggle)
+    return e
+
+
+def link(url, text):
+    return f'<a style="color:#60a5fa; text-decoration:none" href="{url}">{text}</a>'

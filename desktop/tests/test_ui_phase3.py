@@ -93,14 +93,14 @@ def test_channels_connect_and_remove(qtbot, Session, monkeypatch):
     page = channels_page.ChannelsPage()
     qtbot.addWidget(page)
     page.refresh()
-    assert page.list.count() == 0
+    assert page.cards == [] and not page.empty.isHidden()
     page.connect_btn.click()
-    qtbot.waitUntil(lambda: page.list.count() == 1, timeout=5000)
-    assert "Connected One" in page.list.item(0).text()
-    page.list.setCurrentRow(0)
+    qtbot.waitUntil(lambda: len(page.cards) == 1, timeout=5000)
+    assert page.cards[0].title.text() == "Connected One"
+    assert page.count.text() == "1 channel connected"
     monkeypatch.setattr(channels_page.QMessageBox, "question", lambda *a, **k: channels_page.QMessageBox.Yes)
-    page.remove_btn.click()
-    assert page.list.count() == 0
+    page.cards[0].remove_btn.click()
+    assert page.cards == []
 
 
 def test_channels_without_client_id_explains(qtbot, Session):
