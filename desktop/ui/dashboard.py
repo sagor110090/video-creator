@@ -6,26 +6,10 @@ from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFormLayout, QFrame, QHB
 
 from desktop.core import db, settings
 from desktop.services import story_ai
+from desktop.services.stories import create_story
 from desktop.ui.tasks import run_async
 
 STATUS_ICON = {"draft": "○", "queued": "◔", "rendering": "◑", "done": "●", "failed": "✕"}
-
-
-def create_story(title, content, style, talking_style, aspect_ratio, cfg, yt=None) -> int:
-    """Split into scenes (AI image prompts) and save. Runs off the GUI thread."""
-    scenes = story_ai.split_scenes(content, style, talking_style, cfg)
-    if not scenes:
-        raise story_ai.StoryAIError("The script has no sentences long enough to become scenes.")
-    yt = yt or {}
-    with db.Session() as s:
-        st = db.Story(title=title or "Untitled", content=content, style=style, talking_style=talking_style,
-                      aspect_ratio=aspect_ratio, youtube_title=yt.get("youtube_title"),
-                      youtube_description=yt.get("youtube_description"), youtube_tags=yt.get("youtube_tags"))
-        st.scenes = [db.Scene(order=i, narration=x["narration"], image_prompt=x["image_prompt"])
-                     for i, x in enumerate(scenes)]
-        s.add(st)
-        s.commit()
-        return st.id
 
 
 class DashboardPage(QWidget):
