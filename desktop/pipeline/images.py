@@ -153,13 +153,15 @@ def _loremflickr(q, out, ar, cfg):
     return ImageHit("loremflickr", url, "flickr-cc") if _fetch(url, out) else None
 
 
-SOURCES = {"pexels": _pexels, "pixabay": _pixabay, "openverse": _openverse,
-           "pollinations": _pollinations, "loremflickr": _loremflickr}
-
-
 def placeholder(out: Path, aspect_ratio: str) -> ImageHit:
     Image.new("RGB", target_size(aspect_ratio), (18, 18, 28)).save(out, "JPEG", quality=90)
     return ImageHit("placeholder")
+
+
+SOURCES = {"pexels": _pexels, "pixabay": _pixabay, "openverse": _openverse,
+           "pollinations": _pollinations, "loremflickr": _loremflickr,
+           # offline source for tests / no-network use; only used when listed explicitly
+           "placeholder": lambda q, out, ar, cfg: placeholder(out, ar)}
 
 
 def _try_sources(query: str, out: Path, ar: str, cfg: dict) -> ImageHit | None:
