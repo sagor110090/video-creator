@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QFileDialog, 
                                QLabel, QLineEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget)
 
 from desktop.core import settings, voices
-from desktop.pipeline.images import GEMINI_MODELS
+from desktop.pipeline.images import GEMINI_MODELS, OPENROUTER_MODELS
 from desktop.ui import icons
 from desktop.ui.widgets import field, link, page_header, secret_edit, section
 
@@ -43,7 +43,9 @@ class SettingsPage(QWidget):
         self.provider_free.setIcon(icons.icon("image", "#dbe4ff", 15))
         self.provider_gemini = QPushButton(" Gemini (paid)", objectName="pill", checkable=True)
         self.provider_gemini.setIcon(icons.icon("sparkles", "#c084fc", 15))
-        for b in (self.provider_free, self.provider_gemini):
+        self.provider_openrouter = QPushButton(" OpenRouter (paid)", objectName="pill", checkable=True)
+        self.provider_openrouter.setIcon(icons.icon("sparkles", "#60a5fa", 15))
+        for b in (self.provider_free, self.provider_gemini, self.provider_openrouter):
             b.setCursor(Qt.PointingHandCursor)
             self.provider_group.addButton(b)
             prov.addWidget(b)
@@ -80,6 +82,27 @@ class SettingsPage(QWidget):
                             objectName="muted", wordWrap=True))
         img_l.addWidget(self.gemini_box)
         self.provider_gemini.toggled.connect(self.gemini_box.setVisible)
+
+        self.openrouter_box = QFrame(objectName="storycard")
+        self.openrouter_box.setAttribute(Qt.WA_StyledBackground, True)
+        ol = QVBoxLayout(self.openrouter_box)
+        ol.setContentsMargins(12, 10, 12, 12)
+        ol.setSpacing(8)
+        self.fields["openrouter_api_key"] = secret_edit("sk-or-…")
+        ol.addLayout(field("OpenRouter API key", self.fields["openrouter_api_key"],
+                           link("https://openrouter.ai/settings/keys", "Create a key") + " · pay-as-you-go credits, "
+                           "" + link("https://openrouter.ai/settings/credits", "add credits")))
+        self.openrouter_model = QComboBox(editable=True)
+        for model_id, label in OPENROUTER_MODELS.items():
+            self.openrouter_model.addItem(model_id, model_id)
+            self.openrouter_model.setItemData(self.openrouter_model.count() - 1, label, Qt.ToolTipRole)
+        ol.addLayout(field("Model", self.openrouter_model,
+                           "Nano Banana costs about $0.04 per image. Any OpenRouter image model ID works here."))
+        ol.addWidget(QLabel("Images match your Image style. If OpenRouter fails for a scene (no credits, refused "
+                            "prompt), that scene uses the free sources and its Image chip says why.",
+                            objectName="muted", wordWrap=True))
+        img_l.addWidget(self.openrouter_box)
+        self.provider_openrouter.toggled.connect(self.openrouter_box.setVisible)
 
         self.fields["pexels_api_key"] = secret_edit("Optional")
         img_l.addLayout(field("Pexels API key", self.fields["pexels_api_key"],
@@ -188,9 +211,12 @@ class SettingsPage(QWidget):
         for key, f in self.fields.items():
             f.setText(cfg.get(key, ""))
         self.image_sources.setText(cfg["image_sources"])
-        gemini = cfg.get("image_provider") == "gemini"
-        (self.provider_gemini if gemini else self.provider_free).setChecked(True)
-        self.gemini_box.setVisible(gemini)
+        provider = cfg.get("image_provider", "free")
+        {"gemini": self.provider_gemini, "openrouter": self.provider_openrouter}.get(
+            provider, self.provider_free).setChecked(True)
+        self.gemini_box.setVisible(provider == "gemini")
+        self.openrouter_box.setVisible(provider == "openrouter")
+        self.openrouter_model.setCurrentText(cfg.get("openrouter_image_model") or "google/gemini-2.5-flash-image")
         self.gemini_model.setCurrentIndex(max(0, self.gemini_model.findData(cfg.get("gemini_image_model"))))
         self.size_buttons.get(cfg.get("gemini_image_size"), self.size_buttons["2K"]).setChecked(True)
         self.voice_engine.setCurrentIndex(max(0, self.voice_engine.findData(cfg["voice_engine"])))
@@ -206,7 +232,9 @@ class SettingsPage(QWidget):
         for key, f in self.fields.items():
             cfg[key] = f.text().strip()
         cfg["image_sources"] = ",".join(s.strip() for s in self.image_sources.text().split(",") if s.strip())
-        cfg["image_provider"] = "gemini" if self.provider_gemini.isChecked() else "free"
+        cfg["image_provider"] = ("gemini" if self.provider_gemini.isChecked() else
+                                 "openrouter" if self.provider_openrouter.isChecked() else "free")
+        cfg["openrouter_image_model"] = self.openrouter_model.currentText().strip() or "google/gemini-2.5-flash-image"
         cfg["gemini_image_model"] = self.gemini_model.currentData()
         cfg["gemini_image_size"] = next((k for k, b in self.size_buttons.items() if b.isChecked()), "2K")
         cfg["voice_engine"] = self.voice_engine.currentData()

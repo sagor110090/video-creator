@@ -171,3 +171,37 @@ def test_gemini_free_tier_message_is_plain(tmp_path):
     cfg = {**CFG, "image_provider": "gemini", "gemini_api_key": "k", "image_sources": "placeholder"}
     hit = images.fetch_scene_image("x", tmp_path / "i.jpg", "16:9", cfg)
     assert "billing" in hit.note.lower() and "free tier" in hit.note.lower()
+
+
+OPENROUTER = "https://openrouter.ai/api/v1/images"
+
+
+@responses.activate
+def test_openrouter_generates_image(tmp_path):
+    responses.add(responses.POST, OPENROUTER, json={"created": 1, "data": [
+        {"b64_json": _b64_jpeg(), "media_type": "image/jpeg"}], "usage": {"cost": 0.04}})
+    cfg = {**CFG, "image_provider": "openrouter", "openrouter_api_key": "or-key",
+           "openrouter_image_model": "google/gemini-2.5-flash-image"}
+    out = tmp_path / "i.jpg"
+    hit = images.fetch_scene_image("bunny holding a carrot", out, "9:16", cfg, image_style="cartoon")
+    assert hit.source == "openrouter" and out.read_bytes()[:3] == b"\xff\xd8\xff"
+    req = responses.calls[0].request
+    body = json.loads(req.body)
+    assert req.headers["Authorization"] == "Bearer or-key"
+    assert (body["model"], body["aspect_ratio"], body["n"]) == ("google/gemini-2.5-flash-image", "9:16", 1)
+    assert "bunny holding a carrot" in body["prompt"] and "cartoon" in body["prompt"]
+
+
+@responses.activate
+def test_openrouter_no_credits_is_explained(tmp_path):
+    responses.add(responses.POST, OPENROUTER, status=402, json={"error": {"code": 402, "message": "Insufficient credits"}})
+    cfg = {**CFG, "image_provider": "openrouter", "openrouter_api_key": "or-key", "image_sources": "placeholder"}
+    hit = images.fetch_scene_image("x", tmp_path / "i.jpg", "16:9", cfg)
+    assert hit.source == "placeholder"
+    assert "OpenRouter" in hit.note and "credits" in hit.note.lower()
+
+
+def test_openrouter_without_key_skips_to_free(tmp_path):
+    cfg = {**CFG, "image_provider": "openrouter", "openrouter_api_key": "", "image_sources": "placeholder"}
+    hit = images.fetch_scene_image("x", tmp_path / "i.jpg", "16:9", cfg)
+    assert hit.source == "placeholder" and "no OpenRouter API key" in hit.note

@@ -199,3 +199,19 @@ def test_settings_gemini_choice(qtbot):
     cfg = settings.load()
     assert (cfg["image_provider"], cfg["gemini_api_key"], cfg["gemini_image_model"], cfg["gemini_image_size"]) == \
            ("gemini", "AIza-test", "gemini-3.1-flash-lite-image", "1K")
+
+
+def test_settings_openrouter_choice(qtbot):
+    from desktop.ui.settings_page import SettingsPage
+    page = SettingsPage()
+    qtbot.addWidget(page)
+    page.load()
+    page.provider_openrouter.setChecked(True)
+    assert not page.openrouter_box.isHidden() and page.gemini_box.isHidden()
+    page.fields["openrouter_api_key"].setText("sk-or-test")
+    page.save_btn.click()
+    cfg = settings.load()
+    assert (cfg["image_provider"], cfg["openrouter_api_key"], cfg["openrouter_image_model"]) == \
+           ("openrouter", "sk-or-test", "google/gemini-2.5-flash-image")
+    page.load()
+    assert page.provider_openrouter.isChecked()

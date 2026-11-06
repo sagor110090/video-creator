@@ -20,7 +20,7 @@ BUSY = ("queued", "rendering")
 SOURCE_NAMES = {"openverse": "Openverse", "pexels": "Pexels", "pixabay": "Pixabay", "pollinations": "Pollinations (AI)",
                 "loremflickr": "LoremFlickr", "previous_scene": "Reused previous scene", "placeholder": "Placeholder",
                 "manual": "Your file", "imported": "Imported",
-                "gemini": "Gemini (AI)"}
+                "gemini": "Gemini (AI)", "openrouter": "OpenRouter (AI)"}
 
 
 class ClickLabel(QLabel):

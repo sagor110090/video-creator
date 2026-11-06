@@ -64,7 +64,8 @@ IMAGE_STYLES = {
                   "ai_suffix": "cinematic film still, dramatic lighting, shallow depth of field",
                   "guidance": "Dramatic, movie-like shots with strong lighting and mood."},
 }
-AI_SOURCES = {"pollinations", "gemini"}
+AI_SOURCES = {"pollinations", "gemini", "openrouter"}
+PAID_PROVIDERS = {"gemini": "Gemini", "openrouter": "OpenRouter"}
 
 
 def resolve_style(image_style: str | None, content_style: str | None = None) -> str:
@@ -211,8 +212,22 @@ GEMINI_MODELS = {"gemini-nano-banana-2.1": "Nano Banana 2.1 — best (recommende
                  "gemini-3-pro-image": "Nano Banana Pro — most detailed"}
 
 
-class GeminiError(RuntimeError):
-    pass
+class PaidImageError(RuntimeError):
+    """A paid image provider failed; the scene falls back to free sources and keeps this as a note."""
+    provider = "Paid images"
+
+
+class GeminiError(PaidImageError):
+    provider = "Gemini"
+
+
+class OpenRouterError(PaidImageError):
+    provider = "OpenRouter"
+
+
+def _styled_prompt(q, cfg) -> str:
+    style = cfg.get("_ai_suffix") or "realistic photo, natural lighting"
+    return f"{q}. Visual style: {style}. A single image for a video scene, with no text, captions, logos or watermarks."
 
 
 def _find_image_b64(obj):
@@ -241,9 +256,7 @@ def _gemini(q, out, ar, cfg):
     key = cfg.get("gemini_api_key", "").strip()
     if not key:
         raise GeminiError("no Gemini API key in Settings")
-    style = cfg.get("_ai_suffix") or "realistic photo, natural lighting"
-    prompt = (f"{q}. Visual style: {style}. A single image for a video scene, "
-              "with no text, captions, logos or watermarks.")
+    prompt = _styled_prompt(q, cfg)
     body = {"model": cfg.get("gemini_image_model") or "gemini-nano-banana-2.1",
             "input": [{"type": "text", "text": prompt}],
             "response_format": {"type": "image", "aspect_ratio": "16:9" if ar == "16:9" else "9:16",
@@ -267,6 +280,40 @@ def _gemini(q, out, ar, cfg):
     return ImageHit("gemini", None, "ai-generated (Gemini, SynthID)")
 
 
+OPENROUTER_URL = "https://openrouter.ai/api/v1/images"
+OPENROUTER_MODELS = {"google/gemini-2.5-flash-image": "Nano Banana (Gemini 2.5 Flash Image) — about $0.04 / image"}
+
+
+def _openrouter(q, out, ar, cfg):
+    """OpenRouter Image API (pay-as-you-go credits). Raises OpenRouterError with the API's reason."""
+    key = cfg.get("openrouter_api_key", "").strip()
+    if not key:
+        raise OpenRouterError("no OpenRouter API key in Settings")
+    body = {"model": cfg.get("openrouter_image_model") or "google/gemini-2.5-flash-image",
+            "prompt": _styled_prompt(q, cfg), "n": 1, "aspect_ratio": "16:9" if ar == "16:9" else "9:16"}
+    res = requests.post(OPENROUTER_URL, json=body, timeout=180, headers={
+        "Authorization": f"Bearer {key}", "Content-Type": "application/json",
+        "X-Title": "AI Video Creator"})
+    if res.status_code != 200:
+        try:
+            msg = res.json().get("error", {}).get("message") or res.text[:200]
+        except ValueError:
+            msg = res.text[:200]
+        if res.status_code == 402:
+            raise OpenRouterError(f"not enough credits — add credits at openrouter.ai/settings/credits ({msg})")
+        if res.status_code == 401:
+            raise OpenRouterError("the API key was rejected — check it in Settings")
+        raise OpenRouterError(f"HTTP {res.status_code}: {msg}")
+    items = res.json().get("data") or []
+    data = items[0].get("b64_json") if items else None
+    if not data:
+        raise OpenRouterError("no image in the response (the prompt may have been refused)")
+    if not _save(base64.b64decode(data), out):
+        raise OpenRouterError("the returned image could not be read")
+    model = body["model"].split("/")[-1]
+    return ImageHit("openrouter", None, f"ai-generated ({model} via OpenRouter)")
+
+
 def _loremflickr(q, out, ar, cfg):
     w, h = target_size(ar)
     tag = urllib.parse.quote(q.split()[0] if q.strip() else "nature")
@@ -281,14 +328,16 @@ def placeholder(out: Path, aspect_ratio: str) -> ImageHit:
 
 SOURCES = {"pexels": _pexels, "pixabay": _pixabay, "openverse": _openverse,
            "pollinations": _pollinations, "loremflickr": _loremflickr, "gemini": _gemini,
+           "openrouter": _openrouter,
            # offline source for tests / no-network use; only used when listed explicitly
            "placeholder": lambda q, out, ar, cfg: placeholder(out, ar)}
 
 
 def _source_order(cfg: dict) -> list[str]:
-    names = [s.strip().lower() for s in cfg.get("image_sources", "").split(",") if s.strip() and s.strip() != "gemini"]
-    if cfg.get("image_provider") == "gemini":
-        names = ["gemini"] + names        # Gemini first; the free sources are the fallback
+    names = [s.strip().lower() for s in cfg.get("image_sources", "").split(",")
+             if s.strip() and s.strip().lower() not in PAID_PROVIDERS]
+    if cfg.get("image_provider") in PAID_PROVIDERS:
+        names = [cfg["image_provider"]] + names   # paid provider first; the free sources are the fallback
     if cfg.get("_prefer_ai"):
         names = [n for n in names if n in AI_SOURCES] + [n for n in names if n not in AI_SOURCES]
     return names
@@ -305,8 +354,8 @@ def _try_sources(query: str, out: Path, ar: str, cfg: dict) -> ImageHit | None:
             hit = fn(q, out, ar, cfg)
             if hit:
                 return hit
-        except GeminiError as e:
-            cfg.setdefault("_errors", []).append(f"Gemini failed ({e}); used a free source instead")
+        except PaidImageError as e:
+            cfg.setdefault("_errors", []).append(f"{e.provider} failed ({e}); used a free source instead")
         except Exception:
             continue
     return None
@@ -330,7 +379,7 @@ def fetch_scene_image(prompt: str, out, aspect_ratio: str, cfg: dict, previous_i
         hit = _try_sources(q, out, aspect_ratio, cfg)
         if hit:
             return noted(hit)
-        if cfg.get("image_provider") == "gemini" and cfg.get("_errors"):
+        if cfg.get("image_provider") in PAID_PROVIDERS and cfg.get("_errors"):
             cfg["image_provider"] = "free"   # don't pay for (or wait on) the same failure 3 times
     if previous_image and Path(previous_image).exists():
         shutil.copy(previous_image, out)

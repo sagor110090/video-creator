@@ -17,7 +17,9 @@ DEFAULTS = {
     "voice_sample": "",
     "background_music": True,
     "render_preset": "slow",
-    "image_provider": "free",           # free | gemini
+    "image_provider": "free",           # free | gemini | openrouter
+    "openrouter_api_key": "",
+    "openrouter_image_model": "google/gemini-2.5-flash-image",
     "gemini_api_key": "",
     "gemini_image_model": "gemini-nano-banana-2.1",
     "gemini_image_size": "2K",
@@ -35,6 +37,7 @@ ENV_MAP = {
     "POLLINATIONS_TOKEN": "pollinations_token",
     "IMAGE_SOURCES": "image_sources",
     "GEMINI_API_KEY": "gemini_api_key",
+    "OPENROUTER_API_KEY": "openrouter_api_key",
 }
 
 
