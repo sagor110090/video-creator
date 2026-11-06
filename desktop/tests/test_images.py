@@ -1,4 +1,5 @@
 import io
+import json
 import re
 
 import responses
@@ -109,3 +110,54 @@ def test_auto_style_resolves_from_content_style():
     assert images.resolve_style("auto", "story") == "auto"
     assert images.resolve_style("cartoon", "science_short") == "cartoon"
     assert images.resolve_style("nonsense", "story") == "auto"
+
+
+GEMINI = "https://generativelanguage.googleapis.com/v1beta/interactions"
+
+
+def _b64_jpeg():
+    import base64
+    return base64.b64encode(_jpeg(1376, 768)).decode()
+
+
+@responses.activate
+def test_gemini_generates_image_with_style_and_ratio(tmp_path):
+    responses.add(responses.POST, GEMINI, json={"steps": [{"type": "model_output", "content": [
+        {"type": "text", "text": "here you go"}, {"type": "image", "mime_type": "image/jpeg", "data": _b64_jpeg()}]}]})
+    cfg = {**CFG, "image_provider": "gemini", "gemini_api_key": "g-key", "gemini_image_model": "gemini-nano-banana-2.1",
+           "gemini_image_size": "2K"}
+    out = tmp_path / "i.jpg"
+    hit = images.fetch_scene_image("bunny holding a carrot", out, "9:16", cfg, image_style="cartoon")
+    assert hit.source == "gemini" and out.read_bytes()[:3] == b"\xff\xd8\xff"
+    req = responses.calls[0].request
+    body = json.loads(req.body)
+    assert req.headers["x-goog-api-key"] == "g-key" and req.headers["Api-Revision"]
+    assert body["model"] == "gemini-nano-banana-2.1"
+    assert body["response_format"] == {"type": "image", "aspect_ratio": "9:16", "image_size": "2K",
+                                       "mime_type": "image/jpeg"}
+    assert "bunny holding a carrot" in body["input"][0]["text"] and "cartoon" in body["input"][0]["text"]
+
+
+def test_find_image_in_other_response_shapes():
+    b = _b64_jpeg()
+    assert images._find_image_b64({"output_image": {"data": b, "mime_type": "image/png"}}) == b
+    assert images._find_image_b64({"candidates": [{"content": {"parts": [{"inlineData": {"mimeType": "image/png",
+                                                                                         "data": b}}]}}]}) == b
+    assert images._find_image_b64({"steps": [{"content": [{"type": "text", "text": "no"}]}]}) is None
+
+
+@responses.activate
+def test_gemini_failure_falls_back_and_explains(tmp_path):
+    responses.add(responses.POST, GEMINI, status=403, json={"error": {"message": "Billing is not enabled"}})
+    cfg = {**CFG, "image_provider": "gemini", "gemini_api_key": "g-key", "image_sources": "placeholder"}
+    hit = images.fetch_scene_image("anything", tmp_path / "i.jpg", "16:9", cfg)
+    assert hit.source == "placeholder"
+    assert "Gemini" in hit.note and "Billing is not enabled" in hit.note
+
+
+def test_free_provider_never_calls_gemini(tmp_path, monkeypatch):
+    called = []
+    monkeypatch.setitem(images.SOURCES, "gemini", lambda *a: called.append(1))
+    cfg = {**CFG, "image_provider": "free", "gemini_api_key": "g-key", "image_sources": "placeholder"}
+    images.fetch_scene_image("x", tmp_path / "i.jpg", "16:9", cfg, image_style="cartoon")
+    assert called == []

@@ -134,3 +134,17 @@ def test_render_uses_story_image_style(Session, story_id, monkeypatch):
         s.commit()
     jobs.render_story(Session, story_id, lambda e: None, CFG, voice.StubEngine())
     assert styles == ["cartoon", "cartoon"]
+
+
+def test_image_fallback_note_kept_on_scene(Session, story_id, monkeypatch):
+    real = jobs.images.fetch_scene_image
+
+    def with_note(*a, **k):
+        hit = real(*a, **k)
+        hit.note = "Gemini failed (HTTP 403: Billing is not enabled); used a free source instead"
+        return hit
+    monkeypatch.setattr(jobs.images, "fetch_scene_image", with_note)
+    jobs.render_story(Session, story_id, lambda e: None, CFG, voice.StubEngine())
+    with Session() as s:
+        sc = s.get(db.Story, story_id).scenes[0]
+        assert sc.image_status == "done" and "Billing is not enabled" in sc.image_error

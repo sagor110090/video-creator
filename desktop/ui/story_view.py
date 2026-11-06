@@ -19,7 +19,8 @@ from desktop.ui.youtube_panel import YouTubePanel
 BUSY = ("queued", "rendering")
 SOURCE_NAMES = {"openverse": "Openverse", "pexels": "Pexels", "pixabay": "Pixabay", "pollinations": "Pollinations (AI)",
                 "loremflickr": "LoremFlickr", "previous_scene": "Reused previous scene", "placeholder": "Placeholder",
-                "manual": "Your file", "imported": "Imported"}
+                "manual": "Your file", "imported": "Imported",
+                "gemini": "Gemini (AI)"}
 
 
 class ClickLabel(QLabel):
@@ -154,7 +155,13 @@ class SceneRow(QFrame):
         name = SOURCE_NAMES.get(sc.image_source, sc.image_source or "")
         lic = f" · {sc.image_license}" if sc.image_license else ""
         link = f' · <a style="color:#22d3ee" href="{sc.image_source_url}">source</a>' if sc.image_source_url else ""
-        self.source.setText(f"{name}{lic}{link}" if name else "")
+        warn = ""
+        if sc.image_status == "done" and sc.image_error:
+            warn = ' · <span style="color:#fbbf24">⚠ fallback</span>'
+            self.source.setToolTip(sc.image_error)
+        else:
+            self.source.setToolTip("")
+        self.source.setText(f"{name}{lic}{link}{warn}" if name else "")
         if force_text or not self._dirty():
             self.narration.setPlainText(sc.narration)
             self.prompt.setText(sc.image_prompt or "")

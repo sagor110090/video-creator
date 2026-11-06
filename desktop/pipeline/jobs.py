@@ -42,7 +42,7 @@ def _run_stage(scene, stage, story, cfg, engine, previous_image):
                                        image_style=images.resolve_style(story.image_style, story.style))
         scene.image_path, scene.image_source = str(out), hit.source
         scene.image_source_url, scene.image_license = hit.url, hit.license
-        return {"source": hit.source, "license": hit.license, "url": hit.url}
+        return {"source": hit.source, "license": hit.license, "url": hit.url, "warning": hit.note}
     if stage == "voice":
         out = d / "voice.wav"
         used, dur = voice.make_voice(out, scene.narration, style=story.style or "story",
@@ -68,7 +68,8 @@ def _render_scene(s, emit, story, scene, cfg, engine, previous_image) -> bool:
             traceback.print_exc()
             return False
         story.final_path = None  # anything re-rendered makes the final video stale
-        _set_stage(s, emit, scene, stage, "done", **info)
+        warning = info.pop("warning", None)   # done, but with a note (e.g. Gemini fell back to free images)
+        _set_stage(s, emit, scene, stage, "done", error=warning, **info)
     return True
 
 

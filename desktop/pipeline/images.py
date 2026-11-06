@@ -1,4 +1,5 @@
 """Scene images from free sources. Ported from ai_worker/worker.py; every result records its source."""
+import base64
 import random
 import re
 import shutil
@@ -63,7 +64,7 @@ IMAGE_STYLES = {
                   "ai_suffix": "cinematic film still, dramatic lighting, shallow depth of field",
                   "guidance": "Dramatic, movie-like shots with strong lighting and mood."},
 }
-AI_SOURCES = {"pollinations"}
+AI_SOURCES = {"pollinations", "gemini"}
 
 
 def resolve_style(image_style: str | None, content_style: str | None = None) -> str:
@@ -79,6 +80,7 @@ class ImageHit:
     source: str
     url: str | None = None
     license: str | None = None
+    note: str | None = None      # e.g. why Gemini was skipped and a free source used instead
 
 
 def target_size(aspect_ratio: str) -> tuple[int, int]:
@@ -202,6 +204,66 @@ def _pollinations(q, out, ar, cfg):
     return None
 
 
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
+GEMINI_API_REVISION = "2026-05-20"
+GEMINI_MODELS = {"gemini-nano-banana-2.1": "Nano Banana 2.1 — best (recommended)",
+                 "gemini-3.1-flash-lite-image": "Nano Banana 2 Lite — fastest, cheapest",
+                 "gemini-3-pro-image": "Nano Banana Pro — most detailed"}
+
+
+class GeminiError(RuntimeError):
+    pass
+
+
+def _find_image_b64(obj):
+    """Find base64 image bytes in a Gemini response, whatever its exact shape."""
+    if isinstance(obj, dict):
+        mime = obj.get("mime_type") or obj.get("mimeType") or ""
+        if isinstance(obj.get("data"), str) and (obj.get("type") == "image" or mime.startswith("image/")):
+            return obj["data"]
+        for key in ("output_image", "inlineData", "inline_data"):
+            if isinstance(obj.get(key), dict) and isinstance(obj[key].get("data"), str):
+                return obj[key]["data"]
+        values = obj.values()
+    elif isinstance(obj, list):
+        values = obj
+    else:
+        return None
+    for v in values:
+        found = _find_image_b64(v)
+        if found:
+            return found
+    return None
+
+
+def _gemini(q, out, ar, cfg):
+    """Google Gemini image generation (paid; needs an API key). Raises GeminiError with the API's reason."""
+    key = cfg.get("gemini_api_key", "").strip()
+    if not key:
+        raise GeminiError("no Gemini API key in Settings")
+    style = cfg.get("_ai_suffix") or "realistic photo, natural lighting"
+    prompt = (f"{q}. Visual style: {style}. A single image for a video scene, "
+              "with no text, captions, logos or watermarks.")
+    body = {"model": cfg.get("gemini_image_model") or "gemini-nano-banana-2.1",
+            "input": [{"type": "text", "text": prompt}],
+            "response_format": {"type": "image", "aspect_ratio": "16:9" if ar == "16:9" else "9:16",
+                                "image_size": cfg.get("gemini_image_size") or "2K", "mime_type": "image/jpeg"}}
+    res = requests.post(GEMINI_URL, json=body, timeout=180, headers={
+        "x-goog-api-key": key, "Content-Type": "application/json", "Api-Revision": GEMINI_API_REVISION})
+    if res.status_code != 200:
+        try:
+            msg = res.json().get("error", {}).get("message") or res.text[:200]
+        except ValueError:
+            msg = res.text[:200]
+        raise GeminiError(f"HTTP {res.status_code}: {msg}")
+    data = _find_image_b64(res.json())
+    if not data:
+        raise GeminiError("no image in the response (the prompt may have been blocked)")
+    if not _save(base64.b64decode(data), out):
+        raise GeminiError("the returned image could not be read")
+    return ImageHit("gemini", None, "ai-generated (Gemini, SynthID)")
+
+
 def _loremflickr(q, out, ar, cfg):
     w, h = target_size(ar)
     tag = urllib.parse.quote(q.split()[0] if q.strip() else "nature")
@@ -215,13 +277,15 @@ def placeholder(out: Path, aspect_ratio: str) -> ImageHit:
 
 
 SOURCES = {"pexels": _pexels, "pixabay": _pixabay, "openverse": _openverse,
-           "pollinations": _pollinations, "loremflickr": _loremflickr,
+           "pollinations": _pollinations, "loremflickr": _loremflickr, "gemini": _gemini,
            # offline source for tests / no-network use; only used when listed explicitly
            "placeholder": lambda q, out, ar, cfg: placeholder(out, ar)}
 
 
 def _source_order(cfg: dict) -> list[str]:
-    names = [s.strip().lower() for s in cfg.get("image_sources", "").split(",") if s.strip()]
+    names = [s.strip().lower() for s in cfg.get("image_sources", "").split(",") if s.strip() and s.strip() != "gemini"]
+    if cfg.get("image_provider") == "gemini":
+        names = ["gemini"] + names        # Gemini first; the free sources are the fallback
     if cfg.get("_prefer_ai"):
         names = [n for n in names if n in AI_SOURCES] + [n for n in names if n not in AI_SOURCES]
     return names
@@ -238,6 +302,8 @@ def _try_sources(query: str, out: Path, ar: str, cfg: dict) -> ImageHit | None:
             hit = fn(q, out, ar, cfg)
             if hit:
                 return hit
+        except GeminiError as e:
+            cfg.setdefault("_errors", []).append(f"Gemini failed ({e}); used a free source instead")
         except Exception:
             continue
     return None
@@ -252,11 +318,18 @@ def fetch_scene_image(prompt: str, out, aspect_ratio: str, cfg: dict, previous_i
                _ai_suffix=st.get("ai_suffix"), _pixabay_type=st.get("pixabay_type", "photo"),
                _openverse_category=st.get("openverse_category"))
     queries = [_clean_query(prompt), extract_keywords(prompt, 3), "cinematic background"]
+    def noted(hit):
+        errors = list(dict.fromkeys(cfg.get("_errors", [])))
+        hit.note = "; ".join(errors) or None
+        return hit
+
     for q in dict.fromkeys(q for q in queries if q):
         hit = _try_sources(q, out, aspect_ratio, cfg)
         if hit:
-            return hit
+            return noted(hit)
+        if cfg.get("image_provider") == "gemini" and cfg.get("_errors"):
+            cfg["image_provider"] = "free"   # don't pay for (or wait on) the same failure 3 times
     if previous_image and Path(previous_image).exists():
         shutil.copy(previous_image, out)
-        return ImageHit("previous_scene")
-    return placeholder(out, aspect_ratio)
+        return noted(ImageHit("previous_scene"))
+    return noted(placeholder(out, aspect_ratio))

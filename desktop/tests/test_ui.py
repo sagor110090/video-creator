@@ -182,3 +182,20 @@ def test_main_window_navigation(qtbot, Session, seeded, bridge):
     assert win.stack.currentWidget() is win.story_view
     bridge.stateChanged.emit("idle")
     assert win.worker_label.text() == "Worker idle"
+
+
+def test_settings_gemini_choice(qtbot):
+    from desktop.ui.settings_page import SettingsPage
+    page = SettingsPage()
+    qtbot.addWidget(page)
+    page.load()
+    assert page.provider_free.isChecked() and page.gemini_box.isHidden()
+    page.provider_gemini.setChecked(True)
+    assert not page.gemini_box.isHidden()
+    page.fields["gemini_api_key"].setText("AIza-test")
+    page.gemini_model.setCurrentIndex(page.gemini_model.findData("gemini-3.1-flash-lite-image"))
+    page.size_buttons["1K"].setChecked(True)
+    page.save_btn.click()
+    cfg = settings.load()
+    assert (cfg["image_provider"], cfg["gemini_api_key"], cfg["gemini_image_model"], cfg["gemini_image_size"]) == \
+           ("gemini", "AIza-test", "gemini-3.1-flash-lite-image", "1K")

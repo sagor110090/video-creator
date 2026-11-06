@@ -17,6 +17,10 @@ DEFAULTS = {
     "voice_sample": "",
     "background_music": True,
     "render_preset": "slow",
+    "image_provider": "free",           # free | gemini
+    "gemini_api_key": "",
+    "gemini_image_model": "gemini-nano-banana-2.1",
+    "gemini_image_size": "2K",
     "youtube_client_id": "",
     "youtube_client_secret": "",
 }
@@ -30,6 +34,7 @@ ENV_MAP = {
     "PIXABAY_API_KEY": "pixabay_api_key",
     "POLLINATIONS_TOKEN": "pollinations_token",
     "IMAGE_SOURCES": "image_sources",
+    "GEMINI_API_KEY": "gemini_api_key",
 }
 
 

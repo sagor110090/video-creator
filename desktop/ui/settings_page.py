@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QFileDialog, 
                                QLabel, QLineEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget)
 
 from desktop.core import settings, voices
+from desktop.pipeline.images import GEMINI_MODELS
 from desktop.ui import icons
 from desktop.ui.widgets import field, link, page_header, secret_edit, section
 
@@ -34,7 +35,52 @@ class SettingsPage(QWidget):
         ai_l.addStretch()
 
         # ---- Images
-        img, img_l = section("image", "Images", "Free sources, tried in order until one has a match.")
+        img, img_l = section("image", "Images", "Where scene images come from.")
+        img_l.addWidget(QLabel("Image source", objectName="fieldLabel"))
+        prov = QHBoxLayout()
+        self.provider_group = QButtonGroup(self)
+        self.provider_free = QPushButton(" Free sources", objectName="pill", checkable=True)
+        self.provider_free.setIcon(icons.icon("image", "#dbe4ff", 15))
+        self.provider_gemini = QPushButton(" Gemini (paid)", objectName="pill", checkable=True)
+        self.provider_gemini.setIcon(icons.icon("sparkles", "#c084fc", 15))
+        for b in (self.provider_free, self.provider_gemini):
+            b.setCursor(Qt.PointingHandCursor)
+            self.provider_group.addButton(b)
+            prov.addWidget(b)
+        prov.addStretch()
+        img_l.addLayout(prov)
+
+        self.gemini_box = QFrame(objectName="storycard")
+        self.gemini_box.setAttribute(Qt.WA_StyledBackground, True)
+        gl = QVBoxLayout(self.gemini_box)
+        gl.setContentsMargins(12, 10, 12, 12)
+        gl.setSpacing(8)
+        self.fields["gemini_api_key"] = secret_edit("AIza…")
+        gl.addLayout(field("Gemini API key", self.fields["gemini_api_key"],
+                           link("https://aistudio.google.com/apikey", "Get a key in Google AI Studio") +
+                           " · image generation is billed per image"))
+        self.gemini_model = QComboBox()
+        for model_id, label in GEMINI_MODELS.items():
+            self.gemini_model.addItem(label, model_id)
+        gl.addLayout(field("Model", self.gemini_model))
+        gl.addWidget(QLabel("Image size", objectName="fieldLabel"))
+        size_row = QHBoxLayout()
+        self.size_group = QButtonGroup(self)
+        self.size_buttons = {}
+        for size, tip in (("1K", "Cheapest; a little soft at 1080p"), ("2K", "Sharp at 1080p (recommended)"),
+                          ("4K", "Largest, most expensive")):
+            b = QPushButton(size, objectName="pill", checkable=True, toolTip=tip)
+            self.size_group.addButton(b)
+            self.size_buttons[size] = b
+            size_row.addWidget(b)
+        size_row.addStretch()
+        gl.addLayout(size_row)
+        gl.addWidget(QLabel("Every scene image is generated to match your Image style. If Gemini fails for a "
+                            "scene, that scene uses the free sources and its Image chip says why.",
+                            objectName="muted", wordWrap=True))
+        img_l.addWidget(self.gemini_box)
+        self.provider_gemini.toggled.connect(self.gemini_box.setVisible)
+
         self.fields["pexels_api_key"] = secret_edit("Optional")
         img_l.addLayout(field("Pexels API key", self.fields["pexels_api_key"],
                               link("https://www.pexels.com/api/", "Free key") + " · best stock photos"))
@@ -45,7 +91,7 @@ class SettingsPage(QWidget):
         img_l.addLayout(field("Pollinations token", self.fields["pollinations_token"],
                               link("https://auth.pollinations.ai", "Free token") + " · removes the AI-image logo"))
         self.image_sources = QLineEdit()
-        img_l.addLayout(field("Source order", self.image_sources,
+        img_l.addLayout(field("Free source order", self.image_sources,
                               "Comma-separated; the first source with a match wins. Sources without a key are skipped."))
 
         # ---- Voice
@@ -142,6 +188,11 @@ class SettingsPage(QWidget):
         for key, f in self.fields.items():
             f.setText(cfg.get(key, ""))
         self.image_sources.setText(cfg["image_sources"])
+        gemini = cfg.get("image_provider") == "gemini"
+        (self.provider_gemini if gemini else self.provider_free).setChecked(True)
+        self.gemini_box.setVisible(gemini)
+        self.gemini_model.setCurrentIndex(max(0, self.gemini_model.findData(cfg.get("gemini_image_model"))))
+        self.size_buttons.get(cfg.get("gemini_image_size"), self.size_buttons["2K"]).setChecked(True)
         self.voice_engine.setCurrentIndex(max(0, self.voice_engine.findData(cfg["voice_engine"])))
         self._sample_path = cfg.get("voice_sample", "")
         self.voice_sample.setText(Path(self._sample_path).name if self._sample_path else "No sample — default voice")
@@ -155,6 +206,9 @@ class SettingsPage(QWidget):
         for key, f in self.fields.items():
             cfg[key] = f.text().strip()
         cfg["image_sources"] = ",".join(s.strip() for s in self.image_sources.text().split(",") if s.strip())
+        cfg["image_provider"] = "gemini" if self.provider_gemini.isChecked() else "free"
+        cfg["gemini_image_model"] = self.gemini_model.currentData()
+        cfg["gemini_image_size"] = next((k for k, b in self.size_buttons.items() if b.isChecked()), "2K")
         cfg["voice_engine"] = self.voice_engine.currentData()
         cfg["voice_sample"] = self._sample_path
         cfg["background_music"] = self.music.isChecked()
