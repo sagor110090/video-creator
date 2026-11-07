@@ -5,7 +5,7 @@ from pathlib import Path
 from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtGui import QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFrame, QGridLayout, QHBoxLayout, QInputDialog, QLabel,
-                               QLineEdit, QListWidget, QListWidgetItem, QMenu, QPlainTextEdit, QPushButton,
+                               QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox, QPlainTextEdit, QPushButton,
                                QSizePolicy, QToolButton, QVBoxLayout, QWidget)
 
 from desktop.core import db, paths, settings
@@ -142,6 +142,12 @@ class StoryCard(QFrame):
             if video:
                 self.menu.addAction("Show video in Finder", lambda: subprocess.run(["open", "-R", video], check=False))
             self.menu.addAction("Open folder", lambda: subprocess.run(["open", str(paths.story_dir(sid))], check=False))
+            self.menu.addSeparator()
+            delete = self.menu.addAction(icons.icon("trash", "#f87171", 14), "Delete story…",
+                                         lambda: page._delete_story(sid))
+            if story.status in ("rendering", "queued"):
+                delete.setEnabled(False)
+                delete.setToolTip("Wait for the render to finish")
         self.dots.setMenu(self.menu)
         lay.addWidget(self.check)
         lay.addWidget(self.dots)
@@ -379,6 +385,27 @@ class DashboardPage(QWidget):
             return
         stories.mark_uploaded(story_id, url)
         QTimer.singleShot(0, self.refresh)   # after the card's menu has closed: refresh deletes the card
+
+    def _delete_story(self, story_id):
+        with db.Session() as s:
+            st = s.get(db.Story, story_id)
+            if st is None:
+                return
+            title, export_path, on_youtube = st.title or "Untitled", st.export_path, bool(st.youtube_video_id)
+        notes = ["Its scenes, images, voice clips and video inside the app will be removed."]
+        if export_path and Path(export_path).exists():
+            notes.append("The copy in your output folder is kept.")
+        if on_youtube:
+            notes.append("The video on YouTube is not affected.")
+        if QMessageBox.question(self, "Delete story", f"Delete “{title}”?\n\n" + "\n".join(notes)) \
+                != QMessageBox.Yes:
+            return
+        try:
+            stories.delete_story(story_id)
+        except stories.StoryBusyError as e:
+            self.error.setText(str(e))
+            return
+        QTimer.singleShot(0, self.refresh)   # the card's menu is still open: refresh deletes the card
 
     def _unmark_uploaded(self, story_id):
         stories.unmark_uploaded(story_id)

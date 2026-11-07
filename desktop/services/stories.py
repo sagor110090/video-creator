@@ -58,3 +58,25 @@ def unmark_uploaded(story_id: int) -> None:
             return
         st.youtube_upload_status = st.youtube_video_id = st.uploaded_at = None
         s.commit()
+
+
+class StoryBusyError(RuntimeError):
+    pass
+
+
+def delete_story(story_id: int) -> None:
+    """Delete a story, its scenes and its files inside the app. The output-folder copy and any YouTube
+    upload are left alone. Refused while the story is rendering (the worker is using its files)."""
+    import shutil
+    from desktop.core import paths
+    with db.Session() as s:
+        st = s.get(db.Story, story_id)
+        if st is None:
+            return
+        if st.status in ("rendering", "queued"):
+            raise StoryBusyError("This story is rendering. Wait for it to finish, then delete it.")
+        s.delete(st)
+        s.commit()
+    folder = paths.data_dir() / "stories" / str(story_id)
+    if folder.is_dir():
+        shutil.rmtree(folder, ignore_errors=True)

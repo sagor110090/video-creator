@@ -60,7 +60,7 @@ def test_card_menu_marks_uploaded(qtbot, Session, sid, monkeypatch):
     qtbot.addWidget(page)
     card = page.stories.itemWidget(page.stories.item(0))
     labels = [a.text() for a in card.menu.actions() if a.text()]
-    assert labels == ["Open story", "Mark as uploaded…", "Open folder"]
+    assert labels == ["Open story", "Mark as uploaded…", "Open folder", "Delete story…"]
     monkeypatch.setattr(dashboard.QInputDialog, "getText",
                         lambda *a, **k: ("https://youtube.com/shorts/dQw4w9WgXcQ", True))
     card.action("Mark as uploaded…").trigger()
