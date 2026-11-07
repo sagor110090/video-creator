@@ -282,3 +282,19 @@ def test_built_story_hides_steps(qtbot, Session, seeded, bridge):
     qtbot.addWidget(view)
     view.show_story(sid)
     assert view.steps.isHidden()
+
+
+def test_story_cards_show_upload_badge(qtbot, Session, bridge):
+    from desktop.ui import dashboard
+    with Session() as s:
+        for title, up in [("Up", "completed"), ("Later", "scheduled"), ("Broken", "failed"), ("Local", None)]:
+            s.add(db.Story(title=title, content="c", status="done", youtube_upload_status=up))
+        s.commit()
+    page = dashboard.DashboardPage(bridge, open_story=lambda i: None)
+    qtbot.addWidget(page)
+    cards = {page.stories.itemWidget(page.stories.item(i)).title.text(): page.stories.itemWidget(page.stories.item(i))
+             for i in range(page.stories.count())}
+    assert cards["Up"].upload_badge.text() == "Uploaded"
+    assert cards["Later"].upload_badge.text() == "Scheduled"
+    assert cards["Broken"].upload_badge.text() == "Upload failed"
+    assert cards["Local"].upload_badge.isHidden()

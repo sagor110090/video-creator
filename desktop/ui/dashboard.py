@@ -18,6 +18,9 @@ from desktop.ui.voice_picker import VoicePicker
 from desktop.ui.widgets import image_source_combo, settings_source_label
 
 SCRIPT_LIMIT = 5000
+# YouTube state shown next to the render status: (label, background, text colour)
+UPLOAD_BADGES = {"completed": ("Uploaded", "#3a0d14", "#ff6b6b"), "scheduled": ("Scheduled", "#3a2a0d", "#fbbf24"),
+                 "uploading": ("Uploading…", "#102a5c", "#60a5fa"), "failed": ("Upload failed", "#4a1420", "#f87171")}
 THUMB = 64
 
 
@@ -81,7 +84,7 @@ class StoryCard(QFrame):
 
         text = QVBoxLayout()
         text.setSpacing(5)
-        title = QLabel(story.title or "Untitled", objectName="cardTitle")
+        self.title = title = QLabel(story.title or "Untitled", objectName="cardTitle")
         title.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         text.addWidget(title)
         meta_row = QHBoxLayout()
@@ -90,6 +93,20 @@ class StoryCard(QFrame):
         badge = QLabel(label)
         badge.setStyleSheet(css)
         meta_row.addWidget(badge)
+        self.upload_badge = QLabel()
+        up = UPLOAD_BADGES.get(story.youtube_upload_status)
+        if up:
+            up_label, bg, fg = up
+            self.upload_badge.setText(up_label)
+            self.upload_badge.setStyleSheet(f"background:{bg}; color:{fg}; border-radius:8px; padding:2px 8px;"
+                                            "font-size:11px; font-weight:600;")
+            if story.youtube_video_id:
+                self.upload_badge.setToolTip(f"https://youtu.be/{story.youtube_video_id}")
+            elif story.youtube_error:
+                self.upload_badge.setToolTip(story.youtube_error)
+        else:
+            self.upload_badge.hide()
+        meta_row.addWidget(self.upload_badge)
         done = sum(sc.clip_status == "done" for sc in story.scenes)
         fmt = "Shorts" if story.aspect_ratio == "9:16" else "16:9"
         meta = QLabel(f"{done}/{len(story.scenes)} scenes · {fmt} · {story.created_at:%b %d %H:%M}",
