@@ -83,6 +83,14 @@ QPushButton#ai:disabled {{ background: #3b2a6e; color: #b3a6d9; }}
 QPushButton#pill {{ background: {FIELD}; border: 1px solid {LINE}; border-radius: 10px; padding: 7px 12px; }}
 QPushButton#pill:checked {{ background: rgba(59,130,246,0.18); border: 1px solid {ACCENT}; color: white; font-weight: 600; }}
 
+QToolButton#dots {{ border: none; border-radius: 8px; padding: 4px; background: transparent; }}
+QToolButton#dots:hover {{ background: rgba(59,130,246,0.15); }}
+QToolButton#dots::menu-indicator {{ image: none; width: 0; }}
+QMenu {{ background: {PANEL_TOP}; border: 1px solid {LINE}; border-radius: 8px; padding: 4px; }}
+QMenu::item {{ padding: 7px 18px; border-radius: 6px; }}
+QMenu::item:selected {{ background: {ACCENT_2}; }}
+QMenu::separator {{ height: 1px; background: {LINE}; margin: 4px 8px; }}
+
 /* lists / tables */
 QListWidget {{ background: transparent; border: none; outline: none; }}
 QListWidget::item {{ border: none; padding: 0; margin: 0; }}

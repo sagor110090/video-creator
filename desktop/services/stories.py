@@ -1,4 +1,7 @@
-"""Creating stories (shared by the dashboard and the scheduler)."""
+"""Creating stories (shared by the dashboard and the scheduler) and marking manual uploads."""
+import re
+from datetime import datetime
+
 from desktop.core import db
 from desktop.services import story_ai
 
@@ -22,3 +25,36 @@ def create_story(title, content, style, talking_style, aspect_ratio, cfg, yt=Non
         s.add(st)
         s.commit()
         return st.id
+
+
+_YT_ID = re.compile(r"(?:youtu\.be/|[?&]v=|/shorts/|/embed/|/live/)([A-Za-z0-9_-]{11})")
+
+
+def youtube_id(url_or_id: str | None) -> str | None:
+    """Video id from a YouTube link (watch, youtu.be, shorts, embed) or a bare 11-character id."""
+    text = (url_or_id or "").strip()
+    if re.fullmatch(r"[A-Za-z0-9_-]{11}", text):
+        return text
+    m = _YT_ID.search(text)
+    return m.group(1) if m else None
+
+
+def mark_uploaded(story_id: int, url: str | None = None) -> None:
+    """The user uploaded this video themselves. Stops automatic uploading and counts it as uploaded."""
+    with db.Session() as s:
+        st = s.get(db.Story, story_id)
+        st.youtube_upload_status = "manual"
+        st.youtube_video_id = youtube_id(url) or st.youtube_video_id
+        st.youtube_error = None
+        st.uploaded_at = st.uploaded_at or datetime.now()
+        s.commit()
+
+
+def unmark_uploaded(story_id: int) -> None:
+    """Undo mark_uploaded. Uploads the app made itself are left alone."""
+    with db.Session() as s:
+        st = s.get(db.Story, story_id)
+        if st.youtube_upload_status != "manual":
+            return
+        st.youtube_upload_status = st.youtube_video_id = st.uploaded_at = None
+        s.commit()

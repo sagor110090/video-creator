@@ -1,15 +1,17 @@
 """Dashboard: story cards (left) + create-story panel (right), Dark Blue design."""
+import subprocess
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtGui import QPainter, QPainterPath, QPixmap
-from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit,
-                               QListWidget, QListWidgetItem, QPlainTextEdit, QPushButton, QSizePolicy,
-                               QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFrame, QGridLayout, QHBoxLayout, QInputDialog, QLabel,
+                               QLineEdit, QListWidget, QListWidgetItem, QMenu, QPlainTextEdit, QPushButton,
+                               QSizePolicy, QToolButton, QVBoxLayout, QWidget)
 
 from desktop.core import db, paths, settings
 from desktop.pipeline.images import IMAGE_STYLES
 from desktop.services import story_ai
+from desktop.services import stories
 from desktop.services.stories import create_story
 from desktop.ui import icons
 from desktop.ui.style import ACCENT, MUTED, badge_style, glow
@@ -19,7 +21,7 @@ from desktop.ui.widgets import image_source_combo, settings_source_label
 
 SCRIPT_LIMIT = 5000
 # YouTube state shown next to the render status: (label, background, text colour)
-UPLOAD_BADGES = {"completed": ("Uploaded", "#3a0d14", "#ff6b6b"), "scheduled": ("Scheduled", "#3a2a0d", "#fbbf24"),
+UPLOAD_BADGES = {"completed": ("Uploaded", "#3a0d14", "#ff6b6b"), "manual": ("Uploaded", "#3a0d14", "#ff6b6b"), "scheduled": ("Scheduled", "#3a2a0d", "#fbbf24"),
                  "uploading": ("Uploading…", "#102a5c", "#60a5fa"), "failed": ("Upload failed", "#4a1420", "#f87171")}
 THUMB = 64
 
@@ -66,7 +68,7 @@ def _field_label(icon_name, text, color="#c084fc"):
 
 
 class StoryCard(QFrame):
-    def __init__(self, story):
+    def __init__(self, story, page=None):
         super().__init__(objectName="storycard")
         self.story_id = story.id
         self.setAttribute(Qt.WA_StyledBackground, True)
@@ -100,8 +102,11 @@ class StoryCard(QFrame):
             self.upload_badge.setText(up_label)
             self.upload_badge.setStyleSheet(f"background:{bg}; color:{fg}; border-radius:8px; padding:2px 8px;"
                                             "font-size:11px; font-weight:600;")
+            who = "Uploaded by you" if story.youtube_upload_status == "manual" else ""
             if story.youtube_video_id:
-                self.upload_badge.setToolTip(f"https://youtu.be/{story.youtube_video_id}")
+                self.upload_badge.setToolTip(f"{who + ' · ' if who else ''}https://youtu.be/{story.youtube_video_id}")
+            elif who:
+                self.upload_badge.setToolTip(who)
             elif story.youtube_error:
                 self.upload_badge.setToolTip(story.youtube_error)
         else:
@@ -119,15 +124,31 @@ class StoryCard(QFrame):
         self.check = QLabel()
         self.check.setPixmap(icons.pixmap("check", ACCENT, 22))
         self.check.hide()
-        self.dots = QLabel()
-        self.dots.setPixmap(icons.pixmap("dots", MUTED, 18))
+        self.dots = QToolButton(objectName="dots", toolTip="More actions")
+        self.dots.setIcon(icons.icon("dots", MUTED, 18))
+        self.dots.setAutoRaise(True)
+        self.dots.setCursor(Qt.PointingHandCursor)
+        self.dots.setPopupMode(QToolButton.InstantPopup)
+        self.menu = QMenu(self)
+        if page is not None:
+            sid = story.id
+            self.menu.addAction("Open story", lambda: page.open_story(sid))
+            if story.youtube_upload_status == "manual":
+                self.menu.addAction("Mark as not uploaded", lambda: page._unmark_uploaded(sid))
+            elif story.youtube_upload_status not in ("completed", "scheduled", "uploading"):
+                self.menu.addAction("Mark as uploaded…", lambda: page._mark_uploaded(sid))
+            self.menu.addSeparator()
+            self.menu.addAction("Open folder", lambda: subprocess.run(["open", str(paths.story_dir(sid))], check=False))
+        self.dots.setMenu(self.menu)
         lay.addWidget(self.check)
         lay.addWidget(self.dots)
+
+    def action(self, text):
+        return next((a for a in self.menu.actions() if a.text() == text), None)
 
     def set_selected(self, on: bool):
         self.setProperty("selected", "true" if on else "false")
         self.check.setVisible(on)
-        self.dots.setVisible(not on)
         self.style().unpolish(self)
         self.style().polish(self)
 
@@ -322,7 +343,7 @@ class DashboardPage(QWidget):
         with db.Session() as s:
             stories = s.query(db.Story).order_by(db.Story.created_at.desc(), db.Story.id.desc()).all()
             for st in stories:
-                card = StoryCard(st)
+                card = StoryCard(st, self)
                 item = QListWidgetItem()
                 item.setData(Qt.UserRole, st.id)
                 item.setData(Qt.UserRole + 1, (st.title or "").lower())
@@ -347,6 +368,18 @@ class DashboardPage(QWidget):
                 card = self.stories.itemWidget(item)
                 if card:
                     card.set_selected(on)
+
+    def _mark_uploaded(self, story_id):
+        url, ok = QInputDialog.getText(self, "Mark as uploaded",
+                                       "You uploaded this video yourself.\nYouTube link (optional):")
+        if not ok:
+            return
+        stories.mark_uploaded(story_id, url)
+        QTimer.singleShot(0, self.refresh)   # after the card's menu has closed: refresh deletes the card
+
+    def _unmark_uploaded(self, story_id):
+        stories.unmark_uploaded(story_id)
+        QTimer.singleShot(0, self.refresh)
 
     def _count(self):
         n = len(self.script.toPlainText())

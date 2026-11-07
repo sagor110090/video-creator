@@ -13,7 +13,7 @@ def summary(Session) -> dict:
                    .join(db.Story).filter(db.Story.status == "done").scalar())
         return {"stories": count(), "done": count(db.Story.status == "done"),
                 "failed": count(db.Story.status == "failed"),
-                "uploaded": count(db.Story.youtube_upload_status.in_(["completed", "scheduled"])),
+                "uploaded": count(db.Story.youtube_upload_status.in_(["completed", "scheduled", "manual"])),
                 "channels": s.query(func.count(db.Channel.id)).scalar(),
                 "minutes": round(seconds / 60, 1)}
 

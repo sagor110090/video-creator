@@ -3,14 +3,15 @@ from datetime import datetime, timedelta
 
 from PySide6.QtCore import QDateTime
 from PySide6.QtWidgets import (QButtonGroup, QComboBox, QDateTimeEdit, QFormLayout, QGroupBox, QHBoxLayout,
+                               QInputDialog,
                                QLabel, QLineEdit, QPlainTextEdit, QProgressBar, QPushButton, QRadioButton,
                                QVBoxLayout, QWidget)
 
 from desktop.core import db, settings
-from desktop.services import story_ai, youtube
+from desktop.services import stories, story_ai, youtube
 from desktop.ui.tasks import run_async
 
-STATUS_TEXT = {None: "Not uploaded", "uploading": "Uploading…", "scheduled": "Uploaded privately — goes public at {when}",
+STATUS_TEXT = {"manual": "Uploaded by you", None: "Not uploaded", "uploading": "Uploading…", "scheduled": "Uploaded privately — goes public at {when}",
                "completed": "Published", "failed": "Upload failed"}
 
 
@@ -39,7 +40,9 @@ class YouTubePanel(QGroupBox):
         self.meta_btn = QPushButton("✨ Generate title && tags", clicked=self._generate)
         self.save_btn = QPushButton("Save", clicked=self.save)
         self.upload_btn = QPushButton("Upload to YouTube", objectName="primary", clicked=self._upload)
-        for b in (self.meta_btn, self.save_btn, self.upload_btn):
+        self.manual_btn = QPushButton("I uploaded it myself…", clicked=self._toggle_manual,
+                                      toolTip="Already uploaded it in YouTube Studio? Mark it so the app won't upload it")
+        for b in (self.meta_btn, self.save_btn, self.upload_btn, self.manual_btn):
             buttons.addWidget(b)
         buttons.addStretch()
         self.progress = QProgressBar(textVisible=False)
@@ -96,9 +99,25 @@ class YouTubePanel(QGroupBox):
             busy = st.youtube_upload_status == "uploading"
             self.upload_btn.setEnabled(ready and not busy)
             self.upload_btn.setText("Upload again" if st.youtube_video_id else "Upload to YouTube")
+            manual = st.youtube_upload_status == "manual"
+            self.manual_btn.setText("Mark as not uploaded" if manual else "I uploaded it myself…")
+            self.manual_btn.setVisible(manual or st.youtube_upload_status in (None, "failed"))
             if not ready:
                 text += " · render the video first"
         self.status.setText(text)
+
+    def _toggle_manual(self):
+        with db.Session() as s:
+            manual = s.get(db.Story, self.story_id).youtube_upload_status == "manual"
+        if manual:
+            stories.unmark_uploaded(self.story_id)
+        else:
+            url, ok = QInputDialog.getText(self, "Mark as uploaded",
+                                           "You uploaded this video yourself.\nYouTube link (optional):")
+            if not ok:
+                return
+            stories.mark_uploaded(self.story_id, url)
+        self.refresh_status()
 
     def save(self):
         with db.Session() as s:
