@@ -277,7 +277,7 @@ class DashboardPage(QWidget):
                             wordWrap=True))
         bl.addLayout(bt, 1)
         self.banner_art = art = QLabel()
-        art.setPixmap(QPixmap(str(paths.assets_dir() / "logo.png")).scaled(
+        art.setPixmap(QPixmap(str(paths.assets_dir() / "app_icon.png")).scaled(
             64, 64, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         bl.addWidget(art)
         cp.addWidget(banner)

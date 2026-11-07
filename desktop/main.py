@@ -19,6 +19,9 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName("AI Video Creator")
+    app.setApplicationDisplayName("AI Video Creator")
+    from PySide6.QtGui import QIcon
+    app.setWindowIcon(QIcon(str(paths.assets_dir() / "app_icon.png")))   # Dock icon too
     app.setQuitOnLastWindowClosed(False)  # the window may hide to the tray while rendering
     app.setStyleSheet(QSS)
     bridge = WorkerBridge(paths.data_dir())

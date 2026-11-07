@@ -25,7 +25,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("AI Video Creator")
         self.resize(1280, 820)
         self.setMinimumSize(1000, 680)
-        icon = QIcon(str(paths.assets_dir() / "logo.png"))
+        icon = QIcon(str(paths.assets_dir() / "app_icon.png"))
         self.setWindowIcon(icon)
 
         self.dashboard = DashboardPage(bridge, open_story=self.open_story)
@@ -49,7 +49,7 @@ class MainWindow(QMainWindow):
         sl.setContentsMargins(14, 20, 14, 16)
         sl.setSpacing(6)
         logo = QLabel(alignment=Qt.AlignLeft)
-        logo.setPixmap(QPixmap(str(paths.assets_dir() / "logo.png")).scaled(
+        logo.setPixmap(QPixmap(str(paths.assets_dir() / "app_icon.png")).scaled(
             52, 52, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         sl.addWidget(logo)
         sl.addWidget(QLabel("VideoAI", objectName="brand"))
