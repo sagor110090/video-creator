@@ -16,14 +16,17 @@ class FakeBridge(QObject):
 
     def __init__(self):
         super().__init__()
-        self.renders, self.redos = [], []
+        self.renders, self.redos, self.reviews = [], [], []
         self.state, self.current_story, self.busy = "idle", None, False
 
     def submit_render(self, story_id):
         self.renders.append(story_id)
 
-    def submit_redo(self, story_id, scene_id, from_stage):
-        self.redos.append((story_id, scene_id, from_stage))
+    def submit_redo(self, story_id, scene_id, from_stage, image_provider=None):
+        self.redos.append((story_id, scene_id, from_stage) + ((image_provider,) if image_provider is not None else ()))
+
+    def submit_review(self, story_id):
+        self.reviews.append(story_id)
 
     def stop(self):
         pass
@@ -215,3 +218,67 @@ def test_settings_openrouter_choice(qtbot):
            ("openrouter", "sk-or-test", "google/gemini-2.5-flash-image")
     page.load()
     assert page.provider_openrouter.isChecked()
+
+
+def test_dashboard_next_starts_review(qtbot, Session, bridge, monkeypatch):
+    from desktop.ui import dashboard
+    monkeypatch.setattr(dashboard.story_ai, "generate_image_prompts", lambda cfg, n, *style: ["p"] * len(n))
+    opened = []
+    page = dashboard.DashboardPage(bridge, open_story=opened.append)
+    qtbot.addWidget(page)
+    page.image_source.setCurrentIndex(page.image_source.findData("openrouter"))
+    page.script.setPlainText("The first scene is here. The second scene follows.")
+    page.next_btn.click()
+    qtbot.waitUntil(lambda: bool(opened), timeout=5000)
+    with Session() as s:
+        st = s.get(db.Story, opened[0])
+        assert st.image_provider == "openrouter" and len(st.scenes) == 2
+    assert bridge.reviews == [opened[0]] and bridge.renders == []
+
+
+def test_dashboard_default_image_source_stays_unset(qtbot, Session, bridge, monkeypatch):
+    from desktop.ui import dashboard
+    monkeypatch.setattr(dashboard.story_ai, "generate_image_prompts", lambda cfg, n, *style: ["p"] * len(n))
+    settings.save(settings.load() | {"image_provider": "gemini"})
+    opened = []
+    page = dashboard.DashboardPage(bridge, open_story=opened.append)
+    qtbot.addWidget(page)
+    assert page.image_source.currentData() == "" and page.image_source.currentText() == "Default · Gemini (paid)"
+    page.script.setPlainText("Only one scene in this story.")
+    page.create_btn.click()
+    qtbot.waitUntil(lambda: bool(opened), timeout=5000)
+    with Session() as s:
+        assert s.get(db.Story, opened[0]).image_provider is None
+
+
+def test_review_editor_steps_and_build(qtbot, Session, seeded, bridge):
+    from desktop.ui.story_view import StoryView
+    sid, a_id, b_id = seeded
+    with Session() as s:
+        st = s.get(db.Story, sid)
+        st.status, st.error = "review", None
+        s.commit()
+    view = StoryView(bridge, back=lambda: None)
+    qtbot.addWidget(view)
+    view.show_story(sid)
+    assert not view.steps.isHidden() and "Review images" in view.steps.text()
+    assert view.render_btn.text() == "Build video" and view.render_btn.isEnabled()
+    # pick a paid source for one scene and ask for a new image
+    row = view.rows[a_id]
+    row.source_pick.setCurrentIndex(row.source_pick.findData("openrouter"))
+    row.refetch_btn.click()
+    assert bridge.redos == [(sid, a_id, "image", "openrouter")]
+    view.render_btn.click()
+    assert bridge.renders == [sid]
+
+
+def test_built_story_hides_steps(qtbot, Session, seeded, bridge):
+    from desktop.ui.story_view import StoryView
+    sid = seeded[0]
+    with Session() as s:
+        s.get(db.Story, sid).status = "done"
+        s.commit()
+    view = StoryView(bridge, back=lambda: None)
+    qtbot.addWidget(view)
+    view.show_story(sid)
+    assert view.steps.isHidden()

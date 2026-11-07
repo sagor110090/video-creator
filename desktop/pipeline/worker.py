@@ -27,9 +27,11 @@ def worker_main(job_q, event_q, data_dir: str) -> None:
             cfg = settings.load()  # re-read each job so Settings changes apply without restart
             engine = voice.get_engine(cfg)  # cheap: the voice model itself stays loaded
             if kind == "render_story":
-                jobs.render_story(db.Session, kw["story_id"], emit, cfg, engine)
+                jobs.render_story(db.Session, kw["story_id"], emit, cfg, engine,
+                                  images_only=kw.get("images_only", False))
             elif kind == "redo_scene":
-                jobs.redo_scene(db.Session, kw["scene_id"], kw.get("from_stage", "image"), emit, cfg, engine)
+                jobs.redo_scene(db.Session, kw["scene_id"], kw.get("from_stage", "image"), emit, cfg, engine,
+                                image_provider=kw.get("image_provider"))
             else:
                 raise ValueError(f"unknown job kind: {kind}")
         except Exception as e:

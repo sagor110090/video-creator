@@ -57,8 +57,12 @@ class WorkerBridge(QObject):
     def submit_render(self, story_id: int):
         self._submit("render_story", story_id, story_id=story_id)
 
-    def submit_redo(self, story_id: int, scene_id: int, from_stage: str):
-        self._submit("redo_scene", story_id, scene_id=scene_id, from_stage=from_stage)
+    def submit_review(self, story_id: int):
+        """Step 2 of the guided flow: fetch images only, then stop for review."""
+        self._submit("render_story", story_id, story_id=story_id, images_only=True)
+
+    def submit_redo(self, story_id: int, scene_id: int, from_stage: str, image_provider: str | None = None):
+        self._submit("redo_scene", story_id, scene_id=scene_id, from_stage=from_stage, image_provider=image_provider)
 
     def _drain(self):
         for ev in self.handle.events():

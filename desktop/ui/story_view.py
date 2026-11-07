@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (QDialog, QFileDialog, QFrame, QGridLayout, QHBoxL
 from desktop.core import db, paths
 from desktop.services import youtube  # noqa: F401  (patched in tests via story_view.youtube)
 from desktop.ui.style import chip_style
+from desktop.ui.widgets import image_source_combo
 from desktop.ui.youtube_panel import YouTubePanel
 
 BUSY = ("queued", "rendering")
@@ -125,11 +126,13 @@ class SceneRow(QFrame):
         self.clip_btn = QPushButton("▶ Clip", clicked=self._play_clip)
         self.save_btn = QPushButton("Save text", clicked=self._save)
         self.replace_btn = QPushButton("Replace image…", clicked=self._replace_image)
-        self.refetch_btn = QPushButton("New image", clicked=lambda: self._redo("image"))
+        self.source_pick = image_source_combo("Story default")
+        self.source_pick.setToolTip("Where this scene's next image comes from")
+        self.refetch_btn = QPushButton("New image", clicked=self._new_image)
         self.revoice_btn = QPushButton("Re-voice", clicked=lambda: self._redo("voice"))
         self.rerender_btn = QPushButton("Re-render clip", clicked=lambda: self._redo("clip"))
-        for b in (self.voice_btn, self.clip_btn, self.save_btn, self.replace_btn, self.refetch_btn,
-                  self.revoice_btn, self.rerender_btn):
+        for b in (self.voice_btn, self.clip_btn, self.save_btn, self.replace_btn, self.source_pick,
+                  self.refetch_btn, self.revoice_btn, self.rerender_btn):
             bar.addWidget(b)
         bar.addStretch()
         grid.addLayout(bar, 2, 1)
@@ -166,11 +169,16 @@ class SceneRow(QFrame):
             self.narration.setPlainText(sc.narration)
             self.prompt.setText(sc.image_prompt or "")
             self._saved_text = (sc.narration, sc.image_prompt or "")
+        self._scene_provider = sc.image_provider or ""
+        if not self.source_pick.hasFocus():
+            self.source_pick.setCurrentIndex(max(0, self.source_pick.findData(self._scene_provider)))
         self.voice_btn.setEnabled(sc.voice_status == "done" and bool(sc.voice_path))
         self.clip_btn.setEnabled(sc.clip_status == "done" and bool(sc.clip_path))
-        for b in (self.save_btn, self.replace_btn, self.refetch_btn, self.revoice_btn, self.rerender_btn):
+        for b in (self.save_btn, self.replace_btn, self.source_pick, self.refetch_btn, self.revoice_btn,
+                  self.rerender_btn):
             b.setEnabled(not busy)
         self.rerender_btn.setEnabled(not busy and sc.image_status == "done" and sc.voice_status == "done")
+        self.revoice_btn.setEnabled(not busy and sc.voice_status in ("done", "failed"))   # nothing to redo before Build
 
     def _set_thumb(self, path):
         self._image = path if path and Path(path).exists() else None
@@ -239,6 +247,14 @@ class SceneRow(QFrame):
         self.view.bridge.submit_redo(self.story_id, self.scene_id, stage)
         self.view.refresh()
 
+    def _new_image(self):
+        chosen = self.source_pick.currentData() or ""
+        if chosen == self._scene_provider:
+            self.view.bridge.submit_redo(self.story_id, self.scene_id, "image")
+        else:   # remember the new choice for this scene ("" = back to the story default)
+            self.view.bridge.submit_redo(self.story_id, self.scene_id, "image", chosen)
+        self.view.refresh()
+
 
 class StoryView(QWidget):
     def __init__(self, bridge, back):
@@ -262,6 +278,9 @@ class StoryView(QWidget):
         for b in (self.rebuild_btn, self.folder_btn, self.render_btn):
             head.addWidget(b)
 
+        self.steps = QLabel(objectName="steps")
+        self.steps.setTextFormat(Qt.RichText)
+        self.steps.setStyleSheet("background:#0e1a3d; border:1px solid #1c3577; border-radius:10px; padding:8px 14px;")
         self.progress = QProgressBar(textVisible=False)
         self.progress_text = QLabel(objectName="muted")
         self.error = QLabel(objectName="error", wordWrap=True)
@@ -278,6 +297,7 @@ class StoryView(QWidget):
 
         top = QVBoxLayout()
         top.addLayout(head)
+        top.addWidget(self.steps)
         prog = QHBoxLayout()
         prog.addWidget(self.progress, 1)
         prog.addWidget(self.progress_text)
@@ -334,14 +354,45 @@ class StoryView(QWidget):
             self.progress_text.setText(f"{done}/{total} steps · {final}")
             self.error.setText(st.error or "")
             self.render_btn.setEnabled(not busy)
-            self.render_btn.setText({"draft": "Render", "failed": "Retry / resume",
+            self.render_btn.setText({"draft": "Render", "failed": "Retry / resume", "review": "Build video",
                                      "done": "Render missing"}.get(st.status, "Rendering…"))
+            self._update_steps(st)
             self.rebuild_btn.setEnabled(not busy and all(sc.clip_status == "done" for sc in st.scenes))
             self.yt.refresh_status()
             if rows:
                 for sc in st.scenes:
                     if sc.id in self.rows:
                         self.rows[sc.id].update_from(sc, busy)
+
+    def _update_steps(self, st):
+        """① Create → ② Review images → ③ Build video, until the video is built."""
+        if st.status == "done":
+            self.steps.hide()
+            return
+        images_done = all(sc.image_status == "done" for sc in st.scenes)
+        building = any(sc.voice_status != "pending" for sc in st.scenes)
+        if st.status == "review" or (images_done and not building and st.status not in BUSY):
+            current = 2
+        elif building or st.status == "failed":
+            current = 3
+        else:
+            current = 2
+        names = ["Create", "Review images", "Build video"]
+        hints = {2: "Check every image. Change a scene's source and press New image, or Replace image… with your "
+                    "own file. When it looks right, press Build video.",
+                 3: "Narrating scenes, rendering clips and putting the final video together."}
+        parts = []
+        for i, name in enumerate(names, 1):
+            if i < current:
+                parts.append(f'<span style="color:#34d399">✓ {name}</span>')
+            elif i == current:
+                parts.append(f'<b style="color:#ffffff">{i}. {name}</b>')
+            else:
+                parts.append(f'<span style="color:#5b6b94">{i}. {name}</span>')
+        busy_note = " (working…)" if st.status in BUSY else ""
+        self.steps.setText('  <span style="color:#3b5bb5">→</span>  '.join(parts) + busy_note +
+                           f'<br><span style="color:#8a9bc7">{hints[current]}</span>')
+        self.steps.show()
 
     def _load_final(self):
         with db.Session() as s:

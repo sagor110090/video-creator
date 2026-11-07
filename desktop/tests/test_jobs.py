@@ -148,3 +148,64 @@ def test_image_fallback_note_kept_on_scene(Session, story_id, monkeypatch):
     with Session() as s:
         sc = s.get(db.Story, story_id).scenes[0]
         assert sc.image_status == "done" and "Billing is not enabled" in sc.image_error
+
+
+def test_review_step_fetches_images_only(Session, story_id):
+    events = []
+    jobs.render_story(Session, story_id, events.append, CFG, voice.StubEngine(), images_only=True)
+    with Session() as s:
+        st = s.get(db.Story, story_id)
+        assert st.status == "review" and st.final_path is None
+        for sc in st.scenes:
+            assert (sc.image_status, sc.voice_status, sc.clip_status) == ("done", "pending", "pending")
+    assert events[-1] == {"type": "story", "story_id": story_id, "status": "review"}
+    # building afterwards keeps the reviewed images and does the rest
+    jobs.render_story(Session, story_id, lambda e: None, CFG, voice.StubEngine())
+    with Session() as s:
+        st = s.get(db.Story, story_id)
+        assert st.status == "done" and all(sc.clip_status == "done" for sc in st.scenes)
+
+
+def test_image_provider_story_and_scene_override(Session, story_id, monkeypatch):
+    providers = []
+    real = jobs.images.fetch_scene_image
+
+    def spy(prompt, out, ar, cfg, previous_image=None, image_style="auto"):
+        providers.append(cfg.get("image_provider"))
+        return real(prompt, out, ar, cfg, previous_image=previous_image, image_style=image_style)
+    monkeypatch.setattr(jobs.images, "fetch_scene_image", spy)
+    with Session() as s:
+        st = s.get(db.Story, story_id)
+        st.image_provider = "openrouter"
+        st.scenes[1].image_provider = "free"
+        s.commit()
+    jobs.render_story(Session, story_id, lambda e: None, CFG | {"image_provider": "gemini"}, voice.StubEngine(),
+                      images_only=True)
+    assert providers == ["openrouter", "free"]
+
+
+def test_redo_image_in_review_with_new_source(Session, story_id):
+    jobs.render_story(Session, story_id, lambda e: None, CFG, voice.StubEngine(), images_only=True)
+    with Session() as s:
+        scene_id = s.get(db.Story, story_id).scenes[0].id
+    events = []
+    jobs.redo_scene(Session, scene_id, "image", events.append, CFG, voice.StubEngine(), image_provider="gemini")
+    ran = {(e["stage"]) for e in events if e["type"] == "stage" and e["status"] == "running"}
+    assert ran == {"image"}                                   # still reviewing: no voice/clip work
+    with Session() as s:
+        sc = s.get(db.Scene, scene_id)
+        assert sc.image_provider == "gemini" and sc.story.status == "review"
+
+
+def test_redo_image_while_queued_still_review_only(Session, story_id):
+    """The UI marks a story 'queued' before the job runs; that must not turn a review redo into a full build."""
+    jobs.render_story(Session, story_id, lambda e: None, CFG, voice.StubEngine(), images_only=True)
+    with Session() as s:
+        st = s.get(db.Story, story_id)
+        st.status = "queued"
+        scene_id = st.scenes[1].id
+        s.commit()
+    jobs.redo_scene(Session, scene_id, "image", lambda e: None, CFG, voice.StubEngine())
+    with Session() as s:
+        st = s.get(db.Story, story_id)
+        assert st.status == "review" and all(sc.voice_status == "pending" for sc in st.scenes)

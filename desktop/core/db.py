@@ -9,7 +9,7 @@ from desktop.core import paths
 
 STAGES = ("image", "voice", "clip")
 STAGE_STATUSES = ("pending", "running", "done", "failed")
-STORY_STATUSES = ("draft", "queued", "rendering", "done", "failed")
+STORY_STATUSES = ("draft", "queued", "rendering", "review", "done", "failed")
 
 
 class Base(DeclarativeBase):
@@ -56,6 +56,7 @@ class Story(Base):
     aspect_ratio: Mapped[str] = mapped_column(String, default="16:9")
     voice_sample: Mapped[str | None] = mapped_column(String)   # None = Settings default
     image_style: Mapped[str | None] = mapped_column(String, default="auto")
+    image_provider: Mapped[str | None] = mapped_column(String)   # None = Settings; free | gemini | openrouter
     status: Mapped[str] = mapped_column(String, default="draft")
     error: Mapped[str | None] = mapped_column(Text)
     final_path: Mapped[str | None] = mapped_column(String)
@@ -92,6 +93,7 @@ class Scene(Base):
     image_source: Mapped[str | None] = mapped_column(String)
     image_source_url: Mapped[str | None] = mapped_column(String)
     image_license: Mapped[str | None] = mapped_column(String)
+    image_provider: Mapped[str | None] = mapped_column(String)   # None = the story's choice
 
     voice_status: Mapped[str] = mapped_column(String, default="pending")
     voice_path: Mapped[str | None] = mapped_column(String)

@@ -17,11 +17,11 @@ MUTED = "#8a9bc7"
 
 ACCENT_TEXT = "#60a5fa"
 STATUS_COLORS = {"pending": "#334155", "running": "#f59e0b", "done": "#10b981", "failed": "#ef4444",
-                 "draft": "#475569", "queued": "#8b5cf6", "rendering": "#2563eb"}
+                 "draft": "#475569", "queued": "#8b5cf6", "rendering": "#2563eb", "review": "#d97706"}
 # story list badges: (label, background, text colour)
 BADGES = {"done": ("Done", "#0f3d2e", "#34d399"), "rendering": ("Rendering", "#102a5c", "#60a5fa"),
           "queued": ("Queued", "#2a1d5c", "#a78bfa"), "failed": ("Failed", "#4a1420", "#f87171"),
-          "draft": ("Draft", "#1e293b", "#94a3b8")}
+          "draft": ("Draft", "#1e293b", "#94a3b8"), "review": ("Review images", "#3d2a0a", "#fbbf24")}
 
 QSS = f"""
 * {{ font-family: "Helvetica Neue", Arial; font-size: 13px; color: {TEXT}; }}
@@ -104,6 +104,9 @@ QProgressBar::chunk {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 {
 QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
 QScrollBar::handle:vertical {{ background: #22397a; border-radius: 4px; min-height: 30px; }}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+QScrollBar:horizontal {{ background: transparent; height: 10px; margin: 2px; }}
+QScrollBar::handle:horizontal {{ background: #22397a; border-radius: 4px; min-width: 30px; }}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; }}
 QStatusBar {{ background: {BG}; color: {MUTED}; }}
 """
 

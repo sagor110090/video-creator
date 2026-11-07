@@ -15,6 +15,7 @@ from desktop.ui import icons
 from desktop.ui.style import ACCENT, MUTED, badge_style, glow
 from desktop.ui.tasks import run_async
 from desktop.ui.voice_picker import VoicePicker
+from desktop.ui.widgets import image_source_combo, settings_source_label
 
 SCRIPT_LIMIT = 5000
 THUMB = 64
@@ -119,6 +120,7 @@ class DashboardPage(QWidget):
         super().__init__(objectName="page")
         self.bridge, self.open_story = bridge, open_story
         self._yt = {}
+        self._review = False
 
         # ---------------------------------------------------------- stories panel
         stories_panel = QFrame(objectName="panel")
@@ -211,6 +213,11 @@ class DashboardPage(QWidget):
         self.image_style.setToolTip("What the scene images should look like. Cartoon, Anime and 3D are drawn by AI.")
         fmt_voice.addWidget(self.image_style, 1, 0)
         fmt_voice.addLayout(_field_label("film", "Format", "#60a5fa"), 2, 0)
+        fmt_voice.addLayout(_field_label("sparkles", "Image source", "#60a5fa"), 2, 1)
+        self.image_source = image_source_combo(settings_source_label())
+        self.image_source.setToolTip("Free sources, or paid AI images from Gemini / OpenRouter. "
+                                     "You can still change it per scene when reviewing.")
+        fmt_voice.addWidget(self.image_source, 3, 1)
         fmt = QHBoxLayout()
         fmt.setSpacing(8)
         self.landscape = QPushButton(" Landscape 16:9", objectName="pill", checkable=True, checked=True)
@@ -224,7 +231,7 @@ class DashboardPage(QWidget):
             group.addButton(b)
             fmt.addWidget(b)
         fmt.addStretch()
-        fmt_voice.addLayout(fmt, 3, 0, 1, 2)
+        fmt_voice.addLayout(fmt, 3, 0)
         self.voice = VoicePicker()
         self.voice.setToolTip("Default uses the voice sample from Settings")
         fmt_voice.addWidget(self.voice, 1, 1)
@@ -261,8 +268,15 @@ class DashboardPage(QWidget):
         for b in (self.write_btn, self.create_btn):
             b.setCursor(Qt.PointingHandCursor)
             b.setMinimumHeight(40)
+        self.next_btn = QPushButton("Next: review images", clicked=self._next)
+        self.next_btn.setIcon(icons.icon("arrow", "#dbe4ff", 16))
+        self.next_btn.setLayoutDirection(Qt.RightToLeft)
+        self.next_btn.setCursor(Qt.PointingHandCursor)
+        self.next_btn.setMinimumHeight(40)
+        self.next_btn.setToolTip("Step by step: fetch the images first, check or change them, then build the video")
         actions.addWidget(self.write_btn)
         actions.addStretch()
+        actions.addWidget(self.next_btn)
         actions.addWidget(self.create_btn)
         form.addLayout(actions)
         cp.addWidget(body, 1)
@@ -285,6 +299,7 @@ class DashboardPage(QWidget):
     # ------------------------------------------------------------ list
     def refresh(self):
         self.voice.reload()   # the Settings default may have changed
+        self.image_source.setItemText(0, settings_source_label())
         current = self.stories.currentItem().data(Qt.UserRole) if self.stories.currentItem() else None
         self.stories.clear()
         with db.Session() as s:
@@ -348,7 +363,10 @@ class DashboardPage(QWidget):
         self.write_btn.setText(" Write with AI")
         self.error.setText(str(e))
 
-    def _create(self):
+    def _next(self):
+        self._create(review=True)
+
+    def _create(self, review: bool = False):
         content = self.script.toPlainText().strip()
         if not content:
             self.error.setText("The script is empty.")
@@ -356,23 +374,33 @@ class DashboardPage(QWidget):
         if len(content) > SCRIPT_LIMIT:
             self.error.setText(f"The script is over {SCRIPT_LIMIT} characters. Shorten it to keep render times sane.")
             return
-        self._busy(self.create_btn, "Planning scenes…")
+        self._review = review
+        for b in (self.create_btn, self.next_btn):
+            b.setEnabled(False)
+        self._busy(self.next_btn if review else self.create_btn, "Planning scenes…")
         run_async(create_story, self.title.text().strip() or self.topic.text().strip(), content,
                   self.style.currentData(), self.talking.currentData(), self.aspect_ratio, settings.load(), self._yt,
                   voice_sample=self.voice.value(), image_style=self.image_style.currentData(),
+                  image_provider=self.image_source.currentData() or None,
                   on_done=self._created, on_error=self._create_failed)
 
+    def _reset_buttons(self):
+        for b, text in ((self.create_btn, "Create && Render"), (self.next_btn, "Next: review images")):
+            b.setEnabled(True)
+            b.setText(text)
+
     def _created(self, story_id):
-        self.create_btn.setEnabled(True)
-        self.create_btn.setText("Create && Render")
+        self._reset_buttons()
         self.title.clear()
         self.script.clear()
         self._yt = {}
-        self.bridge.submit_render(story_id)
+        if self._review:
+            self.bridge.submit_review(story_id)
+        else:
+            self.bridge.submit_render(story_id)
         self.refresh()
         self.open_story(story_id)
 
     def _create_failed(self, e):
-        self.create_btn.setEnabled(True)
-        self.create_btn.setText("Create && Render")
+        self._reset_buttons()
         self.error.setText(str(e))

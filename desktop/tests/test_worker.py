@@ -65,3 +65,19 @@ def test_recover_interrupted(Session):
         st = s.get(db.Story, sid)
         assert (st.status, st.error) == ("failed", "interrupted")
         assert st.scenes[0].voice_status == "pending"
+
+
+def test_worker_review_job(Session, data_dir):
+    settings.save(settings.load() | {"voice_engine": "stub", "image_sources": "placeholder",
+                                     "background_music": False, "render_preset": "ultrafast"})
+    sid = _story(Session)
+    h = worker.WorkerHandle(data_dir)
+    h.start()
+    try:
+        job = h.submit("render_story", story_id=sid, images_only=True)
+        _wait(h, lambda e: e["type"] == "job_done" and e["job_id"] == job)
+        with Session() as s:
+            st = s.get(db.Story, sid)
+            assert st.status == "review" and st.scenes[0].voice_status == "pending"
+    finally:
+        h.stop()

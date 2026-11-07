@@ -76,3 +76,23 @@ def secret_edit(placeholder="") -> QLineEdit:
 
 def link(url, text):
     return f'<a style="color:#60a5fa; text-decoration:none" href="{url}">{text}</a>'
+
+
+IMAGE_SOURCES = [("free", "Free sources"), ("gemini", "Gemini (paid)"), ("openrouter", "OpenRouter (paid)")]
+
+
+def image_source_combo(default_label: str = "Default") -> "QComboBox":
+    """Free / Gemini / OpenRouter picker. Data '' means 'use the default' (Settings, or the story's choice)."""
+    from PySide6.QtWidgets import QComboBox
+    combo = QComboBox()
+    combo.addItem(icons.icon("settings", "#8a9bc7", 14), default_label, "")
+    for key, label in IMAGE_SOURCES:
+        combo.addItem(icons.icon("sparkles" if key != "free" else "image",
+                                 "#c084fc" if key != "free" else "#60a5fa", 14), label, key)
+    return combo
+
+
+def settings_source_label() -> str:
+    from desktop.core import settings
+    provider = settings.load().get("image_provider", "free")
+    return f"Default · {dict(IMAGE_SOURCES).get(provider, 'Free sources')}"

@@ -37,6 +37,9 @@ def _run_stage(scene, stage, story, cfg, engine, previous_image):
     d = paths.scene_dir(story.id, scene.id)
     if stage == "image":
         out = d / "image.jpg"
+        provider = scene.image_provider or story.image_provider      # per-scene, then per-story, then Settings
+        if provider:
+            cfg = dict(cfg, image_provider=provider)
         hit = images.fetch_scene_image(scene.image_prompt or scene.narration, out, story.aspect_ratio, cfg,
                                        previous_image=previous_image,
                                        image_style=images.resolve_style(story.image_style, story.style))
@@ -56,8 +59,8 @@ def _run_stage(scene, stage, story, cfg, engine, previous_image):
     return {}
 
 
-def _render_scene(s, emit, story, scene, cfg, engine, previous_image) -> bool:
-    for stage in db.STAGES:
+def _render_scene(s, emit, story, scene, cfg, engine, previous_image, stages=db.STAGES) -> bool:
+    for stage in stages:
         if _is_done(scene, stage):
             continue
         _set_stage(s, emit, scene, stage, "running")
@@ -103,7 +106,8 @@ def _finish(s, emit, story, cfg, failed: int):
     s.commit()
 
 
-def render_story(Session, story_id: int, emit: Emit, cfg: dict, engine) -> None:
+def render_story(Session, story_id: int, emit: Emit, cfg: dict, engine, images_only: bool = False) -> None:
+    """Render every unfinished stage. images_only=True is the review step: fetch images, then stop at 'review'."""
     with Session() as s:
         story = s.get(db.Story, story_id)
         # the story's own voice sample, else the current Settings default
@@ -112,18 +116,31 @@ def render_story(Session, story_id: int, emit: Emit, cfg: dict, engine) -> None:
         story.error = None
         s.commit()
         failed, previous_image = 0, None
+        stages = ("image",) if images_only else db.STAGES
         for scene in story.scenes:
-            if not _render_scene(s, emit, story, scene, cfg, engine, previous_image):
+            if not _render_scene(s, emit, story, scene, cfg, engine, previous_image, stages):
                 failed += 1
             if scene.image_status == "done":
                 previous_image = scene.image_path
+        if images_only:
+            story.error = f"{failed} of {len(story.scenes)} images failed" if failed else None
+            _story_event(emit, story, "review")
+            s.commit()
+            return
         _finish(s, emit, story, cfg, failed)
 
 
-def redo_scene(Session, scene_id: int, from_stage: str, emit: Emit, cfg: dict, engine) -> None:
-    """Re-run `from_stage` and later stages of one scene, then rebuild the final video."""
+def redo_scene(Session, scene_id: int, from_stage: str, emit: Emit, cfg: dict, engine,
+               image_provider: str | None = None) -> None:
+    """Re-run `from_stage` and later stages of one scene. While the story is in review only images are
+    redone; after it has been built, the scene is re-rendered and the final video rebuilt."""
     with Session() as s:
         scene = s.get(db.Scene, scene_id)
+        if image_provider is not None:
+            scene.image_provider = image_provider or None      # "" = back to the story/Settings default
         scene.reset_from(from_stage)
+        # never narrated yet = still in the review step (the status may already say "queued")
+        reviewing = from_stage == "image" and all(sc.voice_status == "pending" for sc in scene.story.scenes)
         s.commit()
-    render_story(Session, scene.story_id, emit, cfg, engine)
+        story_id = scene.story_id
+    render_story(Session, story_id, emit, cfg, engine, images_only=reviewing)
