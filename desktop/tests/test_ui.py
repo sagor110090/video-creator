@@ -340,3 +340,37 @@ def test_create_panel_stacks_when_narrow(qtbot, Session, bridge):
     rows = {page.action_grid.getItemPosition(page.action_grid.indexOf(b))[0]
             for b in (page.write_btn, page.next_btn, page.create_btn)}
     assert len(rows) == 2                                           # buttons wrap onto two rows
+
+
+@pytest.mark.parametrize("w,h", [(1100, 700), (1000, 600), (1440, 900)])
+def test_create_fields_never_squashed(qtbot, Session, bridge, w, h):
+    """Short windows scroll the form; inputs keep their real height."""
+    from desktop.ui.main_window import MainWindow
+    win = MainWindow(bridge)
+    qtbot.addWidget(win)
+    win.runner.timer.stop()
+    win.resize(w, h)
+    win.show()
+    qtbot.waitExposed(win)
+    qtbot.wait(50)
+    d = win.dashboard
+    for widget in (d.style, d.talking, d.image_style, d.image_source, d.shorts, d.landscape, d.topic):
+        assert widget.height() >= widget.minimumSizeHint().height() - 1, widget
+    assert d.script.height() >= 100
+
+
+@pytest.mark.parametrize("w,h", [(1000, 680), (1100, 780)])
+def test_create_form_fits_width(qtbot, Session, bridge, w, h):
+    from desktop.ui.main_window import MainWindow
+    win = MainWindow(bridge)
+    qtbot.addWidget(win)
+    win.runner.timer.stop()
+    win.resize(w, h)
+    win.show()
+    qtbot.waitExposed(win)
+    qtbot.wait(50)
+    d = win.dashboard
+    viewport = d.form_scroll.viewport().width()
+    assert d.form_scroll.widget().width() <= viewport + 1          # nothing cut off on the right
+    for b in (d.shorts, d.landscape):
+        assert b.width() >= b.sizeHint().width() - 1               # format labels not truncated

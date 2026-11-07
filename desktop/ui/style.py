@@ -41,7 +41,8 @@ QPushButton#nav:checked {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop
 /* panels */
 QFrame#card, QFrame#panel {{ background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 {PANEL_TOP}, stop:1 {PANEL_BOTTOM});
     border: 1px solid {LINE}; border-radius: 16px; }}
-QFrame#panel QLabel, QFrame#card QLabel, QWidget#formBody {{ background: transparent; }}
+QFrame#panel QLabel, QFrame#card QLabel, QWidget#formBody, QScrollArea#formScroll,
+QScrollArea#formScroll > QWidget {{ background: transparent; }}
 QFrame#banner {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #1e3a8a, stop:0.55 #1d2f73, stop:1 #3b1d7a);
     border: none; border-top-left-radius: 16px; border-top-right-radius: 16px; }}
 QFrame#storycard {{ background: rgba(13,26,61,0.85); border: 1px solid #1a2d63; border-radius: 12px; }}

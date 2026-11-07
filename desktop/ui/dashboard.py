@@ -5,7 +5,7 @@ from pathlib import Path
 from PySide6.QtCore import QEvent, QSize, Qt, QTimer
 from PySide6.QtGui import QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QComboBox, QFrame, QGridLayout, QHBoxLayout, QInputDialog, QLabel,
-                               QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox, QPlainTextEdit, QPushButton,
+                               QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea,
                                QSizePolicy, QToolButton, QVBoxLayout, QWidget)
 
 from desktop.core import db, paths, settings
@@ -347,11 +347,11 @@ class DashboardPage(QWidget):
         form.addLayout(script_head)
         self.script = QPlainTextEdit(placeholderText="Write your own script, or use Write with AI to generate one. "
                                                      "Each sentence becomes one scene.")
+        self.script.setMinimumHeight(120)
         self.script.textChanged.connect(self._count)
         form.addWidget(self.script, 1)
 
         self.error = QLabel(objectName="error", wordWrap=True)
-        form.addWidget(self.error)
         self.write_btn = QPushButton(" Write with AI", objectName="ai")
         self.write_btn.setIcon(icons.icon("sparkles", "#ffffff", 16))
         self.write_btn.clicked.connect(self._write)
@@ -371,8 +371,18 @@ class DashboardPage(QWidget):
         self.action_grid = QGridLayout()
         self.action_grid.setHorizontalSpacing(8)
         self.action_grid.setVerticalSpacing(8)
-        form.addLayout(self.action_grid)
-        cp.addWidget(body, 1)
+        # Scroll instead of squashing: in a short window the inputs keep their real height.
+        self.form_scroll = QScrollArea(objectName="formScroll", widgetResizable=True, frameShape=QFrame.NoFrame)
+        self.form_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.form_scroll.setWidget(body)
+        cp.addWidget(self.form_scroll, 1)
+        footer = QWidget(objectName="formBody")      # buttons stay visible while the form scrolls
+        fl = QVBoxLayout(footer)
+        fl.setContentsMargins(20, 8, 20, 16)
+        fl.setSpacing(6)
+        fl.addWidget(self.error)
+        fl.addLayout(self.action_grid)
+        cp.addWidget(footer)
 
         root = QHBoxLayout(self)
         root.setContentsMargins(4, 4, 4, 4)
@@ -382,6 +392,9 @@ class DashboardPage(QWidget):
         glow(stories_panel)
         glow(create_panel)
         self.create_panel = create_panel
+        # the scroll area lets the form be short, not narrow: keep both panels wide enough to read
+        create_panel.setMinimumWidth(400)
+        stories_panel.setMinimumWidth(320)
         create_panel.installEventFilter(self)
         self.relayout_create(900)
 
