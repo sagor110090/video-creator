@@ -73,6 +73,8 @@ def resolve_style(image_style: str | None, content_style: str | None = None) -> 
     style = image_style if image_style in IMAGE_STYLES else "auto"
     if style == "auto" and content_style == "science_short":
         return "science"
+    if style == "auto" and content_style == "kids_story":
+        return "cartoon"
     return style
 
 

@@ -9,6 +9,7 @@ DEFAULTS = {
     "ai_provider": "deepseek",          # deepseek | groq
     "deepseek_api_key": "",
     "groq_api_key": "",
+    "channel_name": "",                 # optional; the writer may mention it once (never in kids stories)
     "pexels_api_key": "",
     "pixabay_api_key": "",
     "pollinations_token": "",

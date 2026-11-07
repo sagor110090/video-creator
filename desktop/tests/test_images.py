@@ -108,6 +108,7 @@ def test_cartoon_style_prefers_ai_with_style_words(tmp_path, monkeypatch):
 def test_auto_style_resolves_from_content_style():
     assert images.resolve_style("auto", "science_short") == "science"
     assert images.resolve_style("auto", "story") == "auto"
+    assert images.resolve_style("auto", "kids_story") == "cartoon"
     assert images.resolve_style("cartoon", "science_short") == "cartoon"
     assert images.resolve_style("nonsense", "story") == "auto"
 

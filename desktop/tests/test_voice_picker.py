@@ -50,7 +50,7 @@ def test_dashboard_create_uses_chosen_voice(qtbot, Session, monkeypatch, tmp_pat
     page = dashboard.DashboardPage(FakeBridge(), open_story=opened.append)
     qtbot.addWidget(page)
     page.voice.set_value(str(anna))
-    page.script.setPlainText("The first scene is here. The second scene follows.")
+    page.script.setPlainText("The first scene happens right here today. The second scene follows right after it.")
     page.create_btn.click()
     qtbot.waitUntil(lambda: bool(opened), timeout=5000)
     with Session() as s:
@@ -83,7 +83,7 @@ def test_dashboard_and_schedule_image_style(qtbot, Session, monkeypatch):
     page = dashboard.DashboardPage(FakeBridge(), open_story=opened.append)
     qtbot.addWidget(page)
     page.image_style.setCurrentIndex(page.image_style.findData("cartoon"))
-    page.script.setPlainText("A happy bunny hops around. The bunny finds a carrot.")
+    page.script.setPlainText("A happy little bunny hops around the meadow. The bunny finds a giant orange carrot.")
     page.create_btn.click()
     qtbot.waitUntil(lambda: bool(opened), timeout=5000)
     with Session() as s:

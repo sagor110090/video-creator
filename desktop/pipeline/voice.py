@@ -65,7 +65,8 @@ class ChatterboxEngine:
 class EdgeEngine:
     name = "edge"
     VOICES = {"en": {"science_short": "en-US-SteffanNeural", "hollywood_hype": "en-US-AvaNeural",
-                     "trade_wave": "en-GB-RyanNeural", "story": "en-US-AndrewNeural"},
+                     "trade_wave": "en-GB-RyanNeural", "story": "en-US-AndrewNeural",
+                     "kids_story": "en-US-AnaNeural"},
               "hi": {"science_short": "hi-IN-MadhurNeural", "hollywood_hype": "hi-IN-SwaraNeural",
                      "trade_wave": "hi-IN-MadhurNeural", "story": "hi-IN-MadhurNeural",
                      "bollywood_masala": "hi-IN-SwaraNeural"}}

@@ -32,7 +32,7 @@ def fake_ai(monkeypatch):
 
     def story(cfg, topic, style, ar, ts):
         calls["topic"] = topic
-        return {"title": "Space Title", "content": "Stars are far away from us. Planets orbit the sun slowly.",
+        return {"title": "Space Title", "content": "Stars are very far away from us. Planets orbit the sun slowly every year.",
                 "youtube_title": "YT", "youtube_description": "D", "youtube_tags": "a,b"}
     monkeypatch.setattr(scheduler.story_ai, "generate_story", story)
     monkeypatch.setattr(scheduler.story_ai, "generate_image_prompts", lambda cfg, n, *style: ["p"] * len(n))
@@ -58,10 +58,11 @@ def test_run_schedule_creates_story(Session, fake_ai):
     assert fake_ai["topic"] == "space"
 
 
-def test_news_styles_use_news(Session, fake_ai):
+def test_news_styles_pass_plain_topic(Session, fake_ai):
+    """generate_story fetches the real headlines for news styles; the scheduler just passes the topic."""
     sid = _schedule(Session, style="hollywood_hype")
     scheduler.run_schedule({}, Session, sid, NOW)
-    assert fake_ai["topic"].startswith("Create a video about this news: Big News")
+    assert fake_ai["topic"] == "space"
 
 
 def test_run_schedule_failure_recorded_and_not_retried_today(Session, monkeypatch):

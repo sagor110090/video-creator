@@ -30,12 +30,8 @@ def run_schedule(cfg, Session, schedule_id: int, now: datetime) -> int:
             sch.topic, sch.style, sch.talking_style or "none", sch.aspect_ratio, sch.channel_id,
             sch.voice_sample, sch.image_style or "auto")
     try:
-        prompt_topic = topic
-        if style in NEWS_STYLES:
-            news = story_ai.search_news(cfg, topic, style)
-            if news:
-                prompt_topic = f"Create a video about this news: {news[0]['title']}. Details: {news[0].get('snippet', '')}"
-        data = story_ai.generate_story(cfg, prompt_topic or "a random interesting story", style, ar, talking)
+        # news styles fetch real headlines inside generate_story
+        data = story_ai.generate_story(cfg, topic or "a random interesting story", style, ar, talking)
         return create_story(data.get("title") or topic, data["content"], style, talking, ar, cfg, yt=data,
                             schedule_id=schedule_id, channel_id=channel, publish_at=now,
                             voice_sample=sample, image_style=img_style)

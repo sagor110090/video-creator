@@ -30,6 +30,9 @@ class SettingsPage(QWidget):
         self.provider.addItem("DeepSeek", "deepseek")
         self.provider.addItem("Groq", "groq")
         ai_l.addLayout(field("Provider", self.provider))
+        self.fields["channel_name"] = QLineEdit(placeholderText="e.g. The 60s Lab (optional)")
+        ai_l.addLayout(field("Channel name", self.fields["channel_name"],
+                             "The writer may mention it once near the end. Never used in kids stories."))
         self.fields["deepseek_api_key"] = secret_edit("sk-…")
         ai_l.addLayout(field("DeepSeek API key", self.fields["deepseek_api_key"],
                              link("https://platform.deepseek.com/api_keys", "Get a DeepSeek key")))

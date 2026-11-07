@@ -63,14 +63,14 @@ def seeded(Session, data_dir):
 def test_dashboard_write_with_ai_and_create(qtbot, Session, bridge, monkeypatch):
     from desktop.ui import dashboard
     monkeypatch.setattr(dashboard.story_ai, "generate_story",
-                        lambda cfg, topic, style, ar, ts: {"title": "AI Title", "content": "Alpha scene here. Beta scene here."})
+                        lambda cfg, topic, style, ar, ts: {"title": "AI Title", "content": "The alpha scene happens right here today. The beta scene follows right after that."})
     monkeypatch.setattr(dashboard.story_ai, "generate_image_prompts", lambda cfg, n, *style: [f"prompt {i}" for i in range(len(n))])
     opened = []
     page = dashboard.DashboardPage(bridge, open_story=opened.append)
     qtbot.addWidget(page)
     page.topic.setText("lighthouse")
     page.write_btn.click()
-    qtbot.waitUntil(lambda: page.script.toPlainText() == "Alpha scene here. Beta scene here.", timeout=5000)
+    qtbot.waitUntil(lambda: page.script.toPlainText() == "The alpha scene happens right here today. The beta scene follows right after that.", timeout=5000)
     assert page.title.text() == "AI Title"
     page.create_btn.click()
     qtbot.waitUntil(lambda: bool(opened), timeout=5000)
@@ -227,7 +227,7 @@ def test_dashboard_next_starts_review(qtbot, Session, bridge, monkeypatch):
     page = dashboard.DashboardPage(bridge, open_story=opened.append)
     qtbot.addWidget(page)
     page.image_source.setCurrentIndex(page.image_source.findData("openrouter"))
-    page.script.setPlainText("The first scene is here. The second scene follows.")
+    page.script.setPlainText("The first scene happens right here today. The second scene follows right after it.")
     page.next_btn.click()
     qtbot.waitUntil(lambda: bool(opened), timeout=5000)
     with Session() as s:
@@ -298,3 +298,13 @@ def test_story_cards_show_upload_badge(qtbot, Session, bridge):
     assert cards["Later"].upload_badge.text() == "Scheduled"
     assert cards["Broken"].upload_badge.text() == "Upload failed"
     assert cards["Local"].upload_badge.isHidden()
+
+
+def test_settings_channel_name(qtbot):
+    from desktop.ui.settings_page import SettingsPage
+    page = SettingsPage()
+    qtbot.addWidget(page)
+    page.load()
+    page.fields["channel_name"].setText("The 60s Lab")
+    page.save_btn.click()
+    assert settings.load()["channel_name"] == "The 60s Lab"
