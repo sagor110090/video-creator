@@ -50,10 +50,10 @@ class SchedulesPage(QWidget):
         for k, v in story_ai.TALKING_STYLES.items():
             self.talking.addItem(v, k)
         fmt = QHBoxLayout()
-        self.landscape = QRadioButton("Landscape 16:9", checked=True)
-        self.shorts = QRadioButton("Shorts 9:16")
+        self.shorts = QRadioButton("Shorts 9:16", checked=True)
+        self.landscape = QRadioButton("Landscape 16:9")
         grp = QButtonGroup(self)
-        for b in (self.landscape, self.shorts):
+        for b in (self.shorts, self.landscape):
             grp.addButton(b)
             fmt.addWidget(b)
         fmt.addStretch()

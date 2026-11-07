@@ -308,3 +308,35 @@ def test_settings_channel_name(qtbot):
     page.fields["channel_name"].setText("The 60s Lab")
     page.save_btn.click()
     assert settings.load()["channel_name"] == "The 60s Lab"
+
+
+def test_shorts_is_default_format(qtbot, Session, bridge):
+    from desktop.ui.dashboard import DashboardPage
+    from desktop.ui.schedules_page import SchedulesPage
+    page = DashboardPage(bridge, open_story=lambda i: None)
+    qtbot.addWidget(page)
+    assert page.shorts.isChecked() and page.aspect_ratio == "9:16"
+    page.landscape.click()
+    assert page.aspect_ratio == "16:9"
+    sp = SchedulesPage(bridge)
+    qtbot.addWidget(sp)
+    assert sp.shorts.isChecked()
+
+
+def test_create_panel_stacks_when_narrow(qtbot, Session, bridge):
+    from desktop.ui.dashboard import DashboardPage
+    page = DashboardPage(bridge, open_story=lambda i: None)
+    qtbot.addWidget(page)
+    page.relayout_create(900)
+    assert page.field_cols == 2
+    row_style = page.field_grid.getItemPosition(page.field_grid.indexOf(page.style))[0]
+    row_talk = page.field_grid.getItemPosition(page.field_grid.indexOf(page.talking))[0]
+    assert row_style == row_talk                                    # side by side
+    page.relayout_create(420)
+    assert page.field_cols == 1
+    row_style = page.field_grid.getItemPosition(page.field_grid.indexOf(page.style))[0]
+    row_talk = page.field_grid.getItemPosition(page.field_grid.indexOf(page.talking))[0]
+    assert row_talk > row_style                                     # stacked
+    rows = {page.action_grid.getItemPosition(page.action_grid.indexOf(b))[0]
+            for b in (page.write_btn, page.next_btn, page.create_btn)}
+    assert len(rows) == 2                                           # buttons wrap onto two rows

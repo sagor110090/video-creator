@@ -2,7 +2,7 @@
 import subprocess
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtCore import QEvent, QSize, Qt, QTimer
 from PySide6.QtGui import QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QComboBox, QFrame, QGridLayout, QHBoxLayout, QInputDialog, QLabel,
                                QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox, QPlainTextEdit, QPushButton,
@@ -64,6 +64,13 @@ def _icon_label(name, color=ACCENT, size=16):
     lbl.setPixmap(icons.pixmap(name, color, size))
     lbl.setFixedSize(size + 2, size + 2)
     return lbl
+
+
+def _label_widget(icon_name, text, color="#60a5fa"):
+    w = QWidget()
+    w.setLayout(_field_label(icon_name, text, color))
+    w.layout().setContentsMargins(0, 0, 0, 0)
+    return w
 
 
 def _field_label(icon_name, text, color="#c084fc"):
@@ -266,9 +273,10 @@ class DashboardPage(QWidget):
         bt = QVBoxLayout()
         bt.setSpacing(2)
         bt.addWidget(QLabel("Create New Story", objectName="bannerTitle"))
-        bt.addWidget(QLabel("Pick a topic, let AI write it, then render it in your voice.", objectName="bannerSub"))
+        bt.addWidget(QLabel("Pick a topic, let AI write it, then render it in your voice.", objectName="bannerSub",
+                            wordWrap=True))
         bl.addLayout(bt, 1)
-        art = QLabel()
+        self.banner_art = art = QLabel()
         art.setPixmap(QPixmap(str(paths.assets_dir() / "logo.png")).scaled(
             64, 64, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         bl.addWidget(art)
@@ -283,59 +291,49 @@ class DashboardPage(QWidget):
         self.topic = QLineEdit(placeholderText="What is the video about? e.g. The Man Who Sold the Eiffel Tower")
         form.addWidget(self.topic)
 
-        grid = QGridLayout()
-        grid.setHorizontalSpacing(12)
-        grid.setVerticalSpacing(6)
-        grid.addLayout(_field_label("palette", "Content style", "#60a5fa"), 0, 0)
-        grid.addLayout(_field_label("mic", "Talking style", "#60a5fa"), 0, 1)
         self.style = QComboBox()
         for key, label in story_ai.STYLES.items():
             self.style.addItem(label, key)
         self.talking = QComboBox()
         for key, label in story_ai.TALKING_STYLES.items():
             self.talking.addItem(label, key)
-        grid.addWidget(self.style, 1, 0)
-        grid.addWidget(self.talking, 1, 1)
-        form.addSpacing(4)
-        form.addLayout(grid)
-
-        fmt_voice = QGridLayout()
-        fmt_voice.setHorizontalSpacing(12)
-        fmt_voice.setVerticalSpacing(6)
-        fmt_voice.addLayout(_field_label("image", "Image style", "#60a5fa"), 0, 0)
-        fmt_voice.addLayout(_field_label("mic", "Voice", "#60a5fa"), 0, 1)
         self.image_style = QComboBox()
         for key, st in IMAGE_STYLES.items():
             self.image_style.addItem(st["label"], key)
         self.image_style.setToolTip("What the scene images should look like. Cartoon, Anime and 3D are drawn by AI.")
-        fmt_voice.addWidget(self.image_style, 1, 0)
-        fmt_voice.addLayout(_field_label("film", "Format", "#60a5fa"), 2, 0)
-        fmt_voice.addLayout(_field_label("sparkles", "Image source", "#60a5fa"), 2, 1)
+        self.voice = VoicePicker()
+        self.voice.setToolTip("Default uses the voice sample from Settings")
         self.image_source = image_source_combo(settings_source_label())
         self.image_source.setToolTip("Free sources, or paid AI images from Gemini / OpenRouter. "
                                      "You can still change it per scene when reviewing.")
-        fmt_voice.addWidget(self.image_source, 3, 1)
-        fmt = QHBoxLayout()
+        fmt_box = QWidget()
+        fmt = QHBoxLayout(fmt_box)
+        fmt.setContentsMargins(0, 0, 0, 0)
         fmt.setSpacing(8)
-        self.landscape = QPushButton(" Landscape 16:9", objectName="pill", checkable=True, checked=True)
-        self.landscape.setIcon(icons.icon("monitor", "#dbe4ff", 16))
-        self.shorts = QPushButton(" Shorts 9:16", objectName="pill", checkable=True)
+        self.shorts = QPushButton(" Shorts 9:16", objectName="pill", checkable=True, checked=True)
         self.shorts.setIcon(icons.icon("phone", "#dbe4ff", 16))
+        self.landscape = QPushButton(" Landscape 16:9", objectName="pill", checkable=True)
+        self.landscape.setIcon(icons.icon("monitor", "#dbe4ff", 16))
         group = QButtonGroup(self)
         group.setExclusive(True)
-        for b in (self.landscape, self.shorts):
+        for b in (self.shorts, self.landscape):
             b.setCursor(Qt.PointingHandCursor)
             group.addButton(b)
             fmt.addWidget(b)
         fmt.addStretch()
-        fmt_voice.addLayout(fmt, 3, 0)
-        self.voice = VoicePicker()
-        self.voice.setToolTip("Default uses the voice sample from Settings")
-        fmt_voice.addWidget(self.voice, 1, 1)
-        fmt_voice.setColumnStretch(0, 1)
-        fmt_voice.setColumnStretch(1, 1)
+        # (label, field) pairs; relayout_create() puts them in 2 columns, or 1 when the panel is narrow
+        self._fields = [(_label_widget("palette", "Content style"), self.style),
+                        (_label_widget("mic", "Talking style"), self.talking),
+                        (_label_widget("image", "Image style"), self.image_style),
+                        (_label_widget("mic", "Voice"), self.voice),
+                        (_label_widget("film", "Format"), fmt_box),
+                        (_label_widget("sparkles", "Image source"), self.image_source)]
+        self.field_grid = QGridLayout()
+        self.field_grid.setHorizontalSpacing(12)
+        self.field_grid.setVerticalSpacing(6)
+        self.field_cols = 0
         form.addSpacing(4)
-        form.addLayout(fmt_voice)
+        form.addLayout(self.field_grid)
 
         form.addSpacing(4)
         form.addLayout(_field_label("pencil", "Title", "#60a5fa"))
@@ -354,7 +352,6 @@ class DashboardPage(QWidget):
 
         self.error = QLabel(objectName="error", wordWrap=True)
         form.addWidget(self.error)
-        actions = QHBoxLayout()
         self.write_btn = QPushButton(" Write with AI", objectName="ai")
         self.write_btn.setIcon(icons.icon("sparkles", "#ffffff", 16))
         self.write_btn.clicked.connect(self._write)
@@ -371,11 +368,10 @@ class DashboardPage(QWidget):
         self.next_btn.setCursor(Qt.PointingHandCursor)
         self.next_btn.setMinimumHeight(40)
         self.next_btn.setToolTip("Step by step: fetch the images first, check or change them, then build the video")
-        actions.addWidget(self.write_btn)
-        actions.addStretch()
-        actions.addWidget(self.next_btn)
-        actions.addWidget(self.create_btn)
-        form.addLayout(actions)
+        self.action_grid = QGridLayout()
+        self.action_grid.setHorizontalSpacing(8)
+        self.action_grid.setVerticalSpacing(8)
+        form.addLayout(self.action_grid)
         cp.addWidget(body, 1)
 
         root = QHBoxLayout(self)
@@ -385,9 +381,47 @@ class DashboardPage(QWidget):
         root.addWidget(create_panel, 6)
         glow(stories_panel)
         glow(create_panel)
+        self.create_panel = create_panel
+        create_panel.installEventFilter(self)
+        self.relayout_create(900)
 
         bridge.storyChanged.connect(lambda _id: self.refresh())
         self.refresh()
+
+    # ------------------------------------------------------------ responsive create panel
+    def eventFilter(self, obj, event):
+        if obj is getattr(self, "create_panel", None) and event.type() == QEvent.Resize:
+            self.relayout_create(event.size().width())
+        return super().eventFilter(obj, event)
+
+    def relayout_create(self, width: int):
+        """Two columns of fields when there is room; one column (and wrapped buttons) when narrow."""
+        cols = 2 if width >= 560 else 1
+        if cols == self.field_cols:
+            return
+        self.field_cols = cols
+        for grid in (self.field_grid, self.action_grid):
+            while grid.count():
+                grid.takeAt(0)
+        for i, (label, field_) in enumerate(self._fields):
+            row, col = (i // 2) * 2, i % 2
+            if cols == 1:
+                row, col = i * 2, 0
+            self.field_grid.addWidget(label, row, col)
+            self.field_grid.addWidget(field_, row + 1, col)
+        for c in range(2):
+            self.field_grid.setColumnStretch(c, 1 if c < cols else 0)
+        if cols == 2:
+            self.action_grid.addWidget(self.write_btn, 0, 0)
+            self.action_grid.setColumnStretch(1, 1)
+            self.action_grid.addWidget(self.next_btn, 0, 2)
+            self.action_grid.addWidget(self.create_btn, 0, 3)
+        else:
+            self.action_grid.setColumnStretch(1, 0)
+            self.action_grid.addWidget(self.write_btn, 0, 0, 1, 2)
+            self.action_grid.addWidget(self.next_btn, 1, 0)
+            self.action_grid.addWidget(self.create_btn, 1, 1)
+        self.banner_art.setVisible(width >= 460)
 
     @property
     def aspect_ratio(self):
