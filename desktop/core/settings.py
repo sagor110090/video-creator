@@ -6,9 +6,11 @@ from pathlib import Path
 from desktop.core import paths
 
 DEFAULTS = {
-    "ai_provider": "deepseek",          # deepseek | groq
+    "ai_provider": "deepseek",          # deepseek | groq | openrouter
     "deepseek_api_key": "",
     "groq_api_key": "",
+    "deepseek_text_model": "",          # blank = deepseek-chat (flash alias); e.g. deepseek-v4-pro
+    "openrouter_text_model": "deepseek/deepseek-chat-v3.1",
     "channel_name": "",                 # optional; the writer may mention it once (never in kids stories)
     "pexels_api_key": "",
     "pixabay_api_key": "",

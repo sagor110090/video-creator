@@ -21,6 +21,6 @@ resemble-perth
 conformer
 s3tokenizer
 spacy-pkuseg
-setuptools
+setuptools<81  # resemble-perth needs pkg_resources
 # FFmpeg is required but is a system dependency, not a python package.
 # These are the core packages needed for the AI worker to function.

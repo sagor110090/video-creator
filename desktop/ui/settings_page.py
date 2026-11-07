@@ -29,10 +29,17 @@ class SettingsPage(QWidget):
         self.provider = QComboBox()
         self.provider.addItem("DeepSeek", "deepseek")
         self.provider.addItem("Groq", "groq")
+        self.provider.addItem("OpenRouter", "openrouter")
         ai_l.addLayout(field("Provider", self.provider))
         self.fields["channel_name"] = QLineEdit(placeholderText="e.g. The 60s Lab (optional)")
         ai_l.addLayout(field("Channel name", self.fields["channel_name"],
                              "The writer may mention it once near the end. Never used in kids stories."))
+        self.fields["openrouter_text_model"] = QLineEdit(placeholderText="deepseek/deepseek-chat-v3.1")
+        ai_l.addLayout(field("OpenRouter writer model", self.fields["openrouter_text_model"],
+                             "Used when Provider is OpenRouter. Shares the OpenRouter key from Images."))
+        self.fields["deepseek_text_model"] = QLineEdit(placeholderText="deepseek-chat")
+        ai_l.addLayout(field("DeepSeek writer model", self.fields["deepseek_text_model"],
+                             "Blank = deepseek-chat (fast). deepseek-v4-pro writes stronger scripts."))
         self.fields["deepseek_api_key"] = secret_edit("sk-…")
         ai_l.addLayout(field("DeepSeek API key", self.fields["deepseek_api_key"],
                              link("https://platform.deepseek.com/api_keys", "Get a DeepSeek key")))

@@ -3,13 +3,18 @@ Story prompts live in prompts.py; real news comes from news.py (Google News RSS)
 import json
 import random
 import re
+import time
 from datetime import date
 
 import requests
 
+OPENROUTER_DEFAULT_MODEL = "deepseek/deepseek-chat-v3.1"
+
 PROVIDERS = {
     "deepseek": ("https://api.deepseek.com/chat/completions", "deepseek-chat", "deepseek_api_key"),
     "groq": ("https://api.groq.com/openai/v1/chat/completions", "llama-3.3-70b-versatile", "groq_api_key"),
+    # Same key as image generation; model is picked in Settings (OpenRouter hosts many).
+    "openrouter": ("https://openrouter.ai/api/v1/chat/completions", OPENROUTER_DEFAULT_MODEL, "openrouter_api_key"),
 }
 
 from desktop.services import news, prompts
@@ -27,9 +32,14 @@ class StoryAIError(RuntimeError):
     pass
 
 
-def chat(cfg, system, user, temperature=0.7, json_mode=True, timeout=120, max_tokens=None) -> str:
+# Transient provider failures worth retrying: rate limit + server errors.
+RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
+
+
+def chat(cfg, system, user, temperature=0.7, json_mode=True, timeout=120, max_tokens=None, retries=2) -> str:
     provider = cfg.get("ai_provider", "deepseek")
     url, model, key_name = PROVIDERS.get(provider, PROVIDERS["deepseek"])
+    model = cfg.get(f"{provider}_text_model") or model  # optional per-provider override in Settings
     key = cfg.get(key_name)
     if not key:
         raise StoryAIError(f"No API key for {provider}. Add it in Settings.")
@@ -39,16 +49,23 @@ def chat(cfg, system, user, temperature=0.7, json_mode=True, timeout=120, max_to
         payload["response_format"] = {"type": "json_object"}
     if max_tokens:
         payload["max_tokens"] = max_tokens
-    try:
-        res = requests.post(url, json=payload, timeout=timeout, headers={"Authorization": f"Bearer {key}"})
-    except requests.RequestException as e:
-        raise StoryAIError(f"{provider} request failed: {e}") from e
-    if res.status_code != 200:
-        raise StoryAIError(f"{provider} error {res.status_code}: {res.text[:300]}")
-    try:
-        return res.json()["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, ValueError) as e:
-        raise StoryAIError(f"unexpected {provider} response: {res.text[:300]}") from e
+    for attempt in range(retries + 1):
+        try:
+            res = requests.post(url, json=payload, timeout=timeout, headers={"Authorization": f"Bearer {key}"})
+        except requests.RequestException as e:
+            raise StoryAIError(f"{provider} request failed: {e}") from e
+        if res.status_code == 200:
+            try:
+                return res.json()["choices"][0]["message"]["content"]
+            except (KeyError, IndexError, ValueError) as e:
+                raise StoryAIError(f"unexpected {provider} response: {res.text[:300]}") from e
+        detail = f"{provider} error {res.status_code}: {res.text[:300]}"
+        if res.status_code not in RETRYABLE_STATUSES or attempt == retries:
+            if res.status_code in RETRYABLE_STATUSES:
+                detail += (f" — {provider} seems to be having server trouble "
+                           f"(tried {retries + 1} times). Try again in a minute or switch provider in Settings.")
+            raise StoryAIError(detail)
+        time.sleep(2 * (attempt + 1))  # 2s, 4s — most provider blips clear within one retry
 
 
 def _json(text: str):

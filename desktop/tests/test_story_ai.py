@@ -43,10 +43,68 @@ def test_missing_key_raises():
 
 
 @responses.activate
-def test_http_error_raises():
-    _reply("", status=500)
-    with pytest.raises(story_ai.StoryAIError):
+def test_openrouter_uses_own_endpoint_model_and_key():
+    responses.add(responses.POST, "https://openrouter.ai/api/v1/chat/completions",
+                  json={"choices": [{"message": {"content": "hello"}}]})
+    cfg = {"ai_provider": "openrouter", "openrouter_api_key": "or-key",
+           "openrouter_text_model": "deepseek/deepseek-chat-v3.1"}
+    assert story_ai.chat(cfg, "s", "u") == "hello"
+    req = responses.calls[0].request
+    assert json.loads(req.body)["model"] == "deepseek/deepseek-chat-v3.1"
+    assert req.headers["Authorization"] == "Bearer or-key"
+
+
+@responses.activate
+def test_openrouter_model_defaults_when_unset():
+    responses.add(responses.POST, "https://openrouter.ai/api/v1/chat/completions",
+                  json={"choices": [{"message": {"content": "hello"}}]})
+    out = story_ai.chat({"ai_provider": "openrouter", "openrouter_api_key": "or-key"}, "s", "u")
+    assert out == "hello"
+    assert json.loads(responses.calls[0].request.body)["model"] == story_ai.OPENROUTER_DEFAULT_MODEL
+
+
+@responses.activate
+def test_deepseek_model_override_and_default():
+    _reply("hello")
+    assert story_ai.chat(CFG, "s", "u") == "hello"
+    assert json.loads(responses.calls[0].request.body)["model"] == "deepseek-chat"  # blank -> default
+
+    _reply("hello")
+    out = story_ai.chat({**CFG, "deepseek_text_model": "deepseek-v4-pro"}, "s", "u")
+    assert out == "hello"
+    assert json.loads(responses.calls[1].request.body)["model"] == "deepseek-v4-pro"
+
+
+@responses.activate
+def test_http_error_raises(monkeypatch):
+    monkeypatch.setattr(story_ai.time, "sleep", lambda _: None)
+    for _ in range(3):
+        _reply("", status=500)
+    with pytest.raises(story_ai.StoryAIError, match="server trouble"):
         story_ai.generate_story(CFG, "x", "story", "16:9", "none")
+    assert len(responses.calls) == 3
+
+
+@responses.activate
+def test_transient_500s_are_retried(monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(story_ai.time, "sleep", sleeps.append)
+    _reply("", status=500)
+    _reply("", status=503)
+    _reply({"title": "T", "content": "c"})
+    _reply({"content": " ".join(["word"] * 600)})  # expand pass for the short script
+    out = story_ai.generate_story(CFG, "x", "story", "16:9", "none")
+    assert out["title"] == "T"
+    assert len(responses.calls) == 4 and sleeps == [2, 4]
+
+
+@responses.activate
+def test_non_retryable_error_raises_immediately(monkeypatch):
+    monkeypatch.setattr(story_ai.time, "sleep", lambda _: None)
+    _reply("", status=401)
+    with pytest.raises(story_ai.StoryAIError, match="error 401"):
+        story_ai.generate_story(CFG, "x", "story", "16:9", "none")
+    assert len(responses.calls) == 1
 
 
 @responses.activate

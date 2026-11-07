@@ -47,10 +47,19 @@ FFPROBE_PATH = get_executable_path('ffprobe', '/opt/homebrew/bin/ffprobe')
 LOGO_PATH = os.path.join(project_root, 'public', 'logo.png')
 
 # Target Voice Path for voice cloning
-TARGET_VOICE_PATH = os.path.join(project_root, 'public', 'audio', 'sample-1.mp3')
+TARGET_VOICE_PATH = os.path.join(project_root, 'public', 'audio', 'my-voice.wav')
 
 # Initialize Chatterbox models
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+# Chatterbox's multilingual checkpoints were saved on CUDA and some of its
+# torch.load calls omit map_location, which crashes on CPU-only machines (e.g. macOS).
+if DEVICE == "cpu":
+    _orig_torch_load = torch.load
+    def _cpu_torch_load(*args, **kwargs):
+        kwargs.setdefault("map_location", torch.device("cpu"))
+        return _orig_torch_load(*args, **kwargs)
+    torch.load = _cpu_torch_load
 tts_model = None
 vc_model = None
 
@@ -110,105 +119,164 @@ def extract_keywords(text, limit=6):
 
     return " ".join(unique_keywords[:limit])
 
-def download_web_image(query, output_path, aspect_ratio='16:9'):
-    """Downloads a high-quality, watermark-free image from the web with multiple fallbacks."""
+IMAGE_HEADERS = {'User-Agent': 'video-creator/1.0 (+https://github.com/sagor110090/video-creator)'}
+DEFAULT_IMAGE_SOURCES = 'pexels,pixabay,openverse,pollinations,loremflickr'
 
-    # 1. Try Pexels first if API key is available (Best for watermark-free images)
-    pexels_key = os.getenv('PEXELS_API_KEY')
-    if pexels_key:
-        try:
-            orientation = 'landscape' if aspect_ratio == '16:9' else 'portrait'
-            url = f"https://api.pexels.com/v1/search?query={urllib.parse.quote(query)}&per_page=1&orientation={orientation}"
-            headers = {"Authorization": pexels_key}
-            response = requests.get(url, headers=headers, timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('photos'):
-                    img_url = data['photos'][0]['src']['large2x']
-                    img_res = requests.get(img_url, timeout=10)
-                    if img_res.status_code == 200:
-                        with open(output_path, 'wb') as f:
-                            f.write(img_res.content)
-                        return True
-        except Exception as e:
-            print(f"DEBUG: Pexels fallback: {e}", file=sys.stderr)
+def _target_size(aspect_ratio):
+    return (1920, 1080) if aspect_ratio == '16:9' else (1080, 1920)
 
-    # 2. Refine Yahoo search query to exclude watermarked sites
-    search_query = query.replace('"', '').strip()
-    ai_keywords = ['highly detailed', '8k', '4k', 'photorealistic', 'masterpiece', 'stock photo', 'premium']
-    for word in ai_keywords:
-        search_query = re.sub(f'\\b{word}\\b', '', search_query, flags=re.IGNORECASE)
-
-    # Aggressive exclusion of common stock photo sites that use heavy watermarks
-    exclude_terms = (
-        " -stock -watermark -logo -text -premium -shutterstock -gettyimages -alamy -adobe -depositphotos "
-        "-vectorstock -123rf -dreamstime -canstockphoto -istockphoto -pond5 -bigstock -agefotostock"
-    )
-    search_query = search_query.strip() + exclude_terms
-
-    # Simplify query for search engine
-    words = search_query.split()
-    if len(words) > 8:
-        search_query = ' '.join(words[:8])
-
-    print(f"DEBUG: Searching for clean web image. Query: {search_query}", file=sys.stderr)
-    encoded_query = urllib.parse.quote(search_query)
-
+def _save_image_bytes(content, output_path):
+    """Validates content is a real image and saves it as JPEG (sources may return WebP/PNG). Returns True on success."""
     try:
-        # Use filters for large images and creative commons/free types if possible
-        yahoo_url = f"https://images.search.yahoo.com/search/images?p={encoded_query}&imgsz=large&imgtype=photo"
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'}
+        from io import BytesIO
+        img = Image.open(BytesIO(content))
+        img.load()
+        if img.width < 300 or img.height < 300:
+            return False
+        img.convert('RGB').save(output_path, 'JPEG', quality=92)
+    except Exception:
+        return False
+    return True
 
-        response = requests.get(yahoo_url, headers=headers, timeout=10)
-        if response.status_code == 200:
-            # Extract image URLs
-            matches = re.findall(r'"murl":"(http[^"]+)"', response.text)
-            if not matches:
-                matches = re.findall(r'"iurl":"(http[^"]+)"', response.text)
+def _fetch_to(url, output_path, headers=None, timeout=20):
+    res = requests.get(url, headers=headers or IMAGE_HEADERS, timeout=timeout)
+    return res.status_code == 200 and _save_image_bytes(res.content, output_path)
 
-            # List of domains to strictly avoid (known for heavy watermarking)
-            forbidden_domains = [
-                'shutterstock.com', 'gettyimages.com', 'alamy.com', 'adobe.com',
-                'depositphotos.com', '123rf.com', 'dreamstime.com', 'istockphoto.com',
-                'vectorstock.com', 'canstockphoto.com', 'pond5.com', 'bigstockphoto.com'
-            ]
+def _clean_query(query):
+    q = query.replace('"', '').strip()
+    for word in ['highly detailed', '8k', '4k', 'photorealistic', 'masterpiece', 'stock photo', 'premium']:
+        q = re.sub(f'\\b{word}\\b', '', q, flags=re.IGNORECASE)
+    return ' '.join(q.split()[:8])
 
-            if matches:
-                for img_url in matches[:10]: # Check more candidates
-                    img_url = img_url.replace('\\/', '/')
+def _image_from_pexels(query, output_path, aspect_ratio):
+    key = os.getenv('PEXELS_API_KEY')
+    if not key:
+        return False
+    orientation = 'landscape' if aspect_ratio == '16:9' else 'portrait'
+    url = f"https://api.pexels.com/v1/search?query={urllib.parse.quote(query)}&per_page=1&orientation={orientation}"
+    res = requests.get(url, headers={"Authorization": key}, timeout=10)
+    if res.status_code != 200 or not res.json().get('photos'):
+        return False
+    return _fetch_to(res.json()['photos'][0]['src']['large2x'], output_path)
 
-                    # Skip if URL contains forbidden domains
-                    if any(domain in img_url.lower() for domain in forbidden_domains):
-                        continue
-
-                    try:
-                        img_response = requests.get(img_url, headers=headers, timeout=8)
-                        if img_response.status_code == 200:
-                            # Basic image validation
-                            content = img_response.content
-                            if content.startswith(b'\xff\xd8') or content.startswith(b'\x89PNG'):
-                                with open(output_path, 'wb') as f:
-                                    f.write(content)
-                                print(f"DEBUG: Downloaded clean image from: {img_url}", file=sys.stderr)
-                                return True
-                    except:
-                        continue
-
-        # 3. Final fallback: LoremFlickr (High quality, no watermarks, but random-ish)
-        print("DEBUG: Using LoremFlickr fallback", file=sys.stderr)
-        clean_q = urllib.parse.quote(query.split(',')[0].strip())
-        width = 1920 if aspect_ratio == '16:9' else 1080
-        height = 1080 if aspect_ratio == '16:9' else 1920
-        fallback_url = f"https://loremflickr.com/{width}/{height}/{clean_q}"
-        fb_res = requests.get(fallback_url, timeout=10)
-        if fb_res.status_code == 200:
-            with open(output_path, 'wb') as f:
-                f.write(fb_res.content)
+def _image_from_pixabay(query, output_path, aspect_ratio):
+    """Pixabay: free API key (pixabay.com/api/docs), free for commercial use, no attribution."""
+    key = os.getenv('PIXABAY_API_KEY')
+    if not key:
+        return False
+    orientation = 'horizontal' if aspect_ratio == '16:9' else 'vertical'
+    min_w, min_h = (1280, 720) if aspect_ratio == '16:9' else (720, 1280)
+    params = {'key': key, 'q': query[:100], 'image_type': 'photo', 'orientation': orientation,
+              'safesearch': 'true', 'per_page': 3, 'min_width': min_w, 'min_height': min_h}
+    res = requests.get('https://pixabay.com/api/', params=params, timeout=10)
+    hits = res.json().get('hits', []) if res.status_code == 200 else []
+    for hit in hits:
+        if _fetch_to(hit.get('largeImageURL'), output_path):
             return True
+    return False
 
-    except Exception as e:
-        print(f"Warning: Image search failed: {e}", file=sys.stderr)
+def _image_from_openverse(query, output_path, aspect_ratio):
+    """Openverse (WordPress): no key needed. Public-domain only (CC0/PDM) so no attribution is owed."""
+    params = {'q': query, 'license': os.getenv('OPENVERSE_LICENSES', 'cc0,pdm'),
+              'aspect_ratio': 'wide' if aspect_ratio == '16:9' else 'tall',
+              'size': 'large', 'mature': 'false', 'page_size': 10}
+    res = requests.get('https://api.openverse.org/v1/images/', params=params, headers=IMAGE_HEADERS, timeout=15)
+    results = res.json().get('results', []) if res.status_code == 200 else []
+    if not results:
+        # Scenes are scale+cropped to fill the frame, so any aspect ratio works as a fallback.
+        params.pop('aspect_ratio')
+        res = requests.get('https://api.openverse.org/v1/images/', params=params, headers=IMAGE_HEADERS, timeout=15)
+        results = res.json().get('results', []) if res.status_code == 200 else []
+    min_w = 1280 if aspect_ratio == '16:9' else 720
+    for r in results:
+        if (r.get('width') or 0) < min_w:
+            continue
+        try:
+            if _fetch_to(r['url'], output_path, timeout=25):
+                print(f"DEBUG: Openverse image ({r.get('license')}) from {r.get('foreign_landing_url')}", file=sys.stderr)
+                return True
+        except Exception:
+            continue
+    return False
 
+def _image_from_pollinations(query, output_path, aspect_ratio):
+    """Pollinations: free AI image generation matching the prompt, no key needed.
+    Anonymous images include a small pollinations.ai mark; set POLLINATIONS_TOKEN (free account) to remove it."""
+    width, height = _target_size(aspect_ratio)
+    prompt = urllib.parse.quote(f"{query}, cinematic photo, natural lighting")
+    params = {'width': width, 'height': height, 'model': 'flux', 'nologo': 'true',
+              'seed': random.randint(1, 10**6)}
+    headers = dict(IMAGE_HEADERS)
+    token = os.getenv('POLLINATIONS_TOKEN')
+    if token:
+        headers['Authorization'] = f"Bearer {token}"
+    url = f"https://image.pollinations.ai/prompt/{prompt}"
+    for attempt in range(2):
+        res = requests.get(url, params=params, headers=headers, timeout=90)
+        if res.status_code == 200:
+            return _save_image_bytes(res.content, output_path)
+        # Anonymous free tier allows 1 image / 45s per IP; wait once and retry.
+        if res.status_code in (402, 429) and attempt == 0:
+            m = re.search(r'Retry after (\d+)s', res.text)
+            wait = min(int(m.group(1)) + 2 if m else 47, 50)
+            print(f"DEBUG: Pollinations free limit, waiting {wait}s", file=sys.stderr)
+            time.sleep(wait)
+            continue
+        return False
+    return False
+
+def _image_from_yahoo(query, output_path, aspect_ratio):
+    """Scrapes Yahoo image search. Opt-in only: results are often copyrighted, risky for YouTube."""
+    exclude = (" -stock -watermark -logo -shutterstock -gettyimages -alamy -adobe -depositphotos"
+               " -123rf -dreamstime -istockphoto")
+    forbidden = ['shutterstock.com', 'gettyimages.com', 'alamy.com', 'adobe.com', 'depositphotos.com',
+                 '123rf.com', 'dreamstime.com', 'istockphoto.com', 'vectorstock.com', 'pond5.com']
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'}
+    url = f"https://images.search.yahoo.com/search/images?p={urllib.parse.quote(query + exclude)}&imgsz=large&imgtype=photo"
+    res = requests.get(url, headers=headers, timeout=10)
+    if res.status_code != 200:
+        return False
+    matches = re.findall(r'"murl":"(http[^"]+)"', res.text) or re.findall(r'"iurl":"(http[^"]+)"', res.text)
+    for img_url in matches[:10]:
+        img_url = img_url.replace('\\/', '/')
+        if any(d in img_url.lower() for d in forbidden):
+            continue
+        try:
+            if _fetch_to(img_url, output_path, headers=headers, timeout=8):
+                return True
+        except Exception:
+            continue
+    return False
+
+def _image_from_loremflickr(query, output_path, aspect_ratio):
+    width, height = _target_size(aspect_ratio)
+    tag = urllib.parse.quote(query.split(',')[0].split()[0] if query.strip() else 'nature')
+    return _fetch_to(f"https://loremflickr.com/{width}/{height}/{tag}", output_path)
+
+IMAGE_SOURCE_FUNCS = {
+    'pexels': _image_from_pexels,
+    'pixabay': _image_from_pixabay,
+    'openverse': _image_from_openverse,
+    'pollinations': _image_from_pollinations,
+    'yahoo': _image_from_yahoo,
+    'loremflickr': _image_from_loremflickr,
+}
+
+def download_web_image(query, output_path, aspect_ratio='16:9'):
+    """Tries each source in IMAGE_SOURCES order (env, comma-separated) until one returns a valid image."""
+    query = _clean_query(query) or 'cinematic background'
+    sources = [s.strip().lower() for s in os.getenv('IMAGE_SOURCES', DEFAULT_IMAGE_SOURCES).split(',') if s.strip()]
+    for name in sources:
+        func = IMAGE_SOURCE_FUNCS.get(name)
+        if not func:
+            print(f"DEBUG: Unknown image source '{name}', skipping", file=sys.stderr)
+            continue
+        try:
+            if func(query, output_path, aspect_ratio):
+                print(f"DEBUG: Image for '{query}' from {name}", file=sys.stderr)
+                return True
+        except Exception as e:
+            print(f"DEBUG: Image source {name} failed: {e}", file=sys.stderr)
     return False
 
 def run_command(command):

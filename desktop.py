@@ -30,10 +30,10 @@ def start_worker():
     )
 
 def start_queue():
-    """Start the Laravel queue listener."""
-    print("Starting queue listener...")
+    """Start the Laravel queue worker."""
+    print("Starting queue worker...")
     subprocess.Popen(
-        ["php", "artisan", "queue:listen", "--tries=1"],
+        ["php", "artisan", "queue:work", "--tries=1", "--timeout=3600"],
         cwd=BASE_DIR,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL
@@ -48,6 +48,7 @@ def cleanup(signum, frame):
         os.system("taskkill /f /im python.exe")
     else:
         os.system("pkill -f 'php artisan serve'")
+        os.system("pkill -f 'php artisan queue:work'")
         os.system("pkill -f 'php artisan queue:listen'")
         os.system("pkill -f 'worker.py'")
     sys.exit(0)
