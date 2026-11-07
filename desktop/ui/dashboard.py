@@ -4,7 +4,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtGui import QPainter, QPainterPath, QPixmap
-from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFrame, QGridLayout, QHBoxLayout, QInputDialog, QLabel,
+from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QComboBox, QFrame, QGridLayout, QHBoxLayout, QInputDialog, QLabel,
                                QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox, QPlainTextEdit, QPushButton,
                                QSizePolicy, QToolButton, QVBoxLayout, QWidget)
 
@@ -20,6 +20,14 @@ from desktop.ui.voice_picker import VoicePicker
 from desktop.ui.widgets import image_source_combo, settings_source_label
 
 SCRIPT_LIMIT = 5000
+STATUS_FILTERS = [("All stories", ""), ("Done", "done"), ("Rendering", "rendering"), ("Review images", "review"),
+                  ("Failed", "failed"), ("Draft", "draft"), ("On YouTube", "uploaded"),
+                  ("Done, not uploaded", "not_uploaded")]
+_STATUS_ORDER = {"rendering": 0, "queued": 0, "review": 1, "failed": 2, "draft": 3, "done": 4}
+SORTS = {"newest": lambda st: (-st.created_at.timestamp(), -st.id),
+         "oldest": lambda st: (st.created_at.timestamp(), st.id),
+         "title": lambda st: ((st.title or "").lower(), st.id),
+         "status": lambda st: (_STATUS_ORDER.get(st.status, 9), -st.created_at.timestamp())}
 # YouTube state shown next to the render status: (label, background, text colour)
 UPLOAD_BADGES = {"completed": ("Uploaded", "#3a0d14", "#ff6b6b"), "manual": ("Uploaded", "#3a0d14", "#ff6b6b"), "scheduled": ("Scheduled", "#3a2a0d", "#fbbf24"),
                  "uploading": ("Uploading…", "#102a5c", "#60a5fa"), "failed": ("Upload failed", "#4a1420", "#f87171")}
@@ -168,6 +176,7 @@ class DashboardPage(QWidget):
         self.bridge, self.open_story = bridge, open_story
         self._yt = {}
         self._review = False
+        self.select_mode = False
 
         # ---------------------------------------------------------- stories panel
         stories_panel = QFrame(objectName="panel")
@@ -186,15 +195,56 @@ class DashboardPage(QWidget):
         self.search = QLineEdit(objectName="search", placeholderText="Search stories…")
         self.search.addAction(icons.icon("search", MUTED, 16), QLineEdit.LeadingPosition)
         self.search.setFixedWidth(220)
-        self.search.textChanged.connect(self._filter)
+        self.search.textChanged.connect(lambda _t: self._apply_filters())
         head.addWidget(self.search)
         sp.addLayout(head)
+
+        tools = QHBoxLayout()
+        tools.setSpacing(8)
+        self.format_filter = QComboBox(toolTip="Show only one format")
+        for label, data in (("All formats", ""), ("Shorts 9:16", "9:16"), ("Landscape 16:9", "16:9")):
+            self.format_filter.addItem(label, data)
+        self.status_filter = QComboBox(toolTip="Show only stories in this state")
+        for label, data in STATUS_FILTERS:
+            self.status_filter.addItem(label, data)
+        self.sort = QComboBox(toolTip="Sort stories")
+        for label, data in (("Newest first", "newest"), ("Oldest first", "oldest"), ("Title A–Z", "title"),
+                            ("Status", "status")):
+            self.sort.addItem(label, data)
+        self.select_btn = QPushButton("Select", objectName="pill", checkable=True,
+                                      toolTip="Pick several stories to delete at once")
+        self.select_btn.setCursor(Qt.PointingHandCursor)
+        self.select_btn.toggled.connect(self._set_select_mode)
+        for w in (self.format_filter, self.status_filter, self.sort):
+            w.currentIndexChanged.connect(lambda _=0: self._apply_filters())
+            tools.addWidget(w)
+        self.sort.currentIndexChanged.disconnect()
+        self.sort.currentIndexChanged.connect(lambda _=0: self.refresh())
+        tools.addStretch()
+        tools.addWidget(self.select_btn)
+        sp.addLayout(tools)
+
+        self.bulk_bar = QFrame(objectName="storycard")
+        self.bulk_bar.setAttribute(Qt.WA_StyledBackground, True)
+        bb = QHBoxLayout(self.bulk_bar)
+        bb.setContentsMargins(10, 6, 8, 6)
+        self.select_all_btn = QPushButton("Select all", clicked=self._select_all)
+        self.select_none_btn = QPushButton("Select none", clicked=lambda: self.stories.clearSelection())
+        self.selected_count = QLabel("0 selected", objectName="muted")
+        self.delete_selected_btn = QPushButton(" Delete selected", objectName="danger", clicked=self._delete_selected)
+        self.delete_selected_btn.setIcon(icons.icon("trash", "#ffffff", 14))
+        for w in (self.select_all_btn, self.select_none_btn, self.selected_count):
+            bb.addWidget(w)
+        bb.addStretch()
+        bb.addWidget(self.delete_selected_btn)
+        self.bulk_bar.hide()
+        sp.addWidget(self.bulk_bar)
 
         self.stories = QListWidget()
         self.stories.setSpacing(5)
         self.stories.setVerticalScrollMode(QListWidget.ScrollPerPixel)
         self.stories.itemDoubleClicked.connect(lambda it: self.open_story(it.data(Qt.UserRole)))
-        self.stories.currentItemChanged.connect(self._on_select)
+        self.stories.itemSelectionChanged.connect(self._on_select)
         sp.addWidget(self.stories, 1)
         hint = QHBoxLayout()
         hint.addWidget(_icon_label("info", MUTED, 14))
@@ -347,36 +397,108 @@ class DashboardPage(QWidget):
     def refresh(self):
         self.voice.reload()   # the Settings default may have changed
         self.image_source.setItemText(0, settings_source_label())
-        current = self.stories.currentItem().data(Qt.UserRole) if self.stories.currentItem() else None
+        keep = {it.data(Qt.UserRole) for it in self.stories.selectedItems()}
+        self.stories.blockSignals(True)
         self.stories.clear()
         with db.Session() as s:
-            stories = s.query(db.Story).order_by(db.Story.created_at.desc(), db.Story.id.desc()).all()
+            stories = sorted(s.query(db.Story).all(), key=SORTS[self.sort.currentData() or "newest"])
             for st in stories:
                 card = StoryCard(st, self)
                 item = QListWidgetItem()
                 item.setData(Qt.UserRole, st.id)
                 item.setData(Qt.UserRole + 1, (st.title or "").lower())
+                item.setData(Qt.UserRole + 2, st.aspect_ratio)
+                item.setData(Qt.UserRole + 3, st.status)
+                item.setData(Qt.UserRole + 4, st.youtube_upload_status or "")
                 item.setSizeHint(QSize(0, THUMB + 22))
                 self.stories.addItem(item)
                 self.stories.setItemWidget(item, card)
-                if st.id == current:
-                    self.stories.setCurrentItem(item)
-        n = len(stories)
-        self.count_label.setText(f"{n} {'story' if n == 1 else 'stories'}")
-        self._filter(self.search.text())
+                if st.id in keep:
+                    item.setSelected(True)
+        self.stories.blockSignals(False)
+        self._total = len(stories)
+        self._apply_filters()
+        self._on_select()
 
-    def _filter(self, text):
-        text = text.strip().lower()
+    def _matches(self, item) -> bool:
+        text = self.search.text().strip().lower()
+        if text and text not in item.data(Qt.UserRole + 1):
+            return False
+        fmt = self.format_filter.currentData()
+        if fmt and item.data(Qt.UserRole + 2) != fmt:
+            return False
+        want = self.status_filter.currentData()
+        status, upload = item.data(Qt.UserRole + 3), item.data(Qt.UserRole + 4)
+        if want == "uploaded":
+            return upload in ("completed", "manual", "scheduled")
+        if want == "not_uploaded":
+            return status == "done" and upload in ("", "failed")
+        if want == "rendering":
+            return status in ("rendering", "queued")
+        return not want or status == want
+
+    def _apply_filters(self):
+        shown = 0
         for i in range(self.stories.count()):
             item = self.stories.item(i)
-            item.setHidden(bool(text) and text not in item.data(Qt.UserRole + 1))
+            ok = self._matches(item)
+            item.setHidden(not ok)
+            if not ok and item.isSelected():
+                item.setSelected(False)      # never act on stories you can't see
+            shown += ok
+        total = getattr(self, "_total", shown)
+        noun = "story" if total == 1 else "stories"
+        self.count_label.setText(f"{total} {noun}" if shown == total else f"{shown} of {total} {noun}")
 
-    def _on_select(self, current, previous):
-        for item, on in ((previous, False), (current, True)):
-            if item is not None:
-                card = self.stories.itemWidget(item)
-                if card:
-                    card.set_selected(on)
+    def _on_select(self, *_):
+        for i in range(self.stories.count()):
+            item = self.stories.item(i)
+            card = self.stories.itemWidget(item)
+            if card:
+                card.set_selected(item.isSelected())
+        n = len(self.stories.selectedItems())
+        self.selected_count.setText(f"{n} selected")
+        self.delete_selected_btn.setEnabled(n > 0)
+
+    def _set_select_mode(self, on: bool):
+        self.select_mode = on
+        self.stories.clearSelection()
+        self.stories.setSelectionMode(QAbstractItemView.MultiSelection if on else QAbstractItemView.SingleSelection)
+        self.bulk_bar.setVisible(on)
+        self.select_btn.setText("Done" if on else "Select")
+        self._on_select()
+
+    def _select_all(self):
+        for i in range(self.stories.count()):
+            item = self.stories.item(i)
+            if not item.isHidden():
+                item.setSelected(True)
+
+    def _delete_selected(self):
+        ids = [it.data(Qt.UserRole) for it in self.stories.selectedItems() if not it.isHidden()]
+        if not ids:
+            return
+        with db.Session() as s:
+            rows = {st.id: st for st in s.query(db.Story).filter(db.Story.id.in_(ids))}
+            busy = [i for i in ids if rows[i].status in ("rendering", "queued")]
+        todo = [i for i in ids if i not in busy]
+        if not todo:
+            self.error.setText("The selected stories are rendering. Wait for them to finish, then delete them.")
+            return
+        n = len(todo)
+        msg = (f"Delete {n} {'story' if n == 1 else 'stories'}?\n\nTheir scenes, images, voice clips and videos "
+               "inside the app will be removed. Copies in your output folder and videos on YouTube are kept.")
+        if busy:
+            msg += f"\n\n{len(busy)} rendering {'story is' if len(busy) == 1 else 'stories are'} skipped."
+        if QMessageBox.question(self, "Delete stories", msg) != QMessageBox.Yes:
+            return
+        for sid in todo:
+            try:
+                stories.delete_story(sid)
+            except stories.StoryBusyError:
+                busy.append(sid)
+        self.error.setText(f"Skipped {len(busy)} rendering {'story' if len(busy) == 1 else 'stories'}." if busy else "")
+        QTimer.singleShot(0, self.refresh)
 
     def _mark_uploaded(self, story_id):
         url, ok = QInputDialog.getText(self, "Mark as uploaded",

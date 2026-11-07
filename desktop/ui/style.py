@@ -80,6 +80,9 @@ QPushButton#ai {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 {AI}, 
     color: white; font-weight: 600; border: none; padding: 9px 18px; }}
 QPushButton#ai:hover {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #8b5cf6, stop:1 #c084fc); }}
 QPushButton#ai:disabled {{ background: #3b2a6e; color: #b3a6d9; }}
+QPushButton#danger {{ background: #b91c1c; color: white; font-weight: 600; border: none; padding: 7px 14px; }}
+QPushButton#danger:hover {{ background: #dc2626; }}
+QPushButton#danger:disabled {{ background: #3a1a1f; color: #a37b80; }}
 QPushButton#pill {{ background: {FIELD}; border: 1px solid {LINE}; border-radius: 10px; padding: 7px 12px; }}
 QPushButton#pill:checked {{ background: rgba(59,130,246,0.18); border: 1px solid {ACCENT}; color: white; font-weight: 600; }}
 
