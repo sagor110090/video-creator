@@ -60,6 +60,7 @@ class Story(Base):
     status: Mapped[str] = mapped_column(String, default="draft")
     error: Mapped[str | None] = mapped_column(Text)
     final_path: Mapped[str | None] = mapped_column(String)
+    export_path: Mapped[str | None] = mapped_column(String)    # copy in the user's output folder
     schedule_id: Mapped[int | None] = mapped_column(ForeignKey("schedules.id", ondelete="SET NULL"))
     # YouTube
     channel_id: Mapped[int | None] = mapped_column(ForeignKey("channels.id", ondelete="SET NULL"))

@@ -138,6 +138,9 @@ class StoryCard(QFrame):
             elif story.youtube_upload_status not in ("completed", "scheduled", "uploading"):
                 self.menu.addAction("Mark as uploaded…", lambda: page._mark_uploaded(sid))
             self.menu.addSeparator()
+            video = next((p for p in (story.export_path, story.final_path) if p and Path(p).exists()), None)
+            if video:
+                self.menu.addAction("Show video in Finder", lambda: subprocess.run(["open", "-R", video], check=False))
             self.menu.addAction("Open folder", lambda: subprocess.run(["open", str(paths.story_dir(sid))], check=False))
         self.dots.setMenu(self.menu)
         lay.addWidget(self.check)

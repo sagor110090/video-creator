@@ -1,14 +1,18 @@
 """Settings: API keys, image sources, voice and render options (saved to settings.json)."""
+import subprocess
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, QUrl
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout,
-                               QLabel, QLineEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget)
+                               QLabel, QLineEdit, QMessageBox, QPushButton, QScrollArea, QVBoxLayout,
+                               QWidget)
 
-from desktop.core import settings, voices
+from desktop.core import db, settings, voices
+from desktop.pipeline import export
 from desktop.pipeline.images import GEMINI_MODELS, OPENROUTER_MODELS
 from desktop.ui import icons
+from desktop.ui.tasks import run_async
 from desktop.ui.widgets import field, link, page_header, secret_edit, section
 
 QUALITY = [("Best", "slow", "Sharpest, slowest"), ("Balanced", "medium", "Good for most videos"),
@@ -158,6 +162,23 @@ class SettingsPage(QWidget):
             q_row.addWidget(b)
         q_row.addStretch()
         video_l.addLayout(q_row)
+
+        video_l.addWidget(QLabel("Output folder", objectName="fieldLabel"))
+        out_box = QFrame(objectName="storycard")
+        out_box.setAttribute(Qt.WA_StyledBackground, True)
+        ob = QHBoxLayout(out_box)
+        ob.setContentsMargins(12, 8, 8, 8)
+        self.output_label = QLabel(objectName="cardTitle", wordWrap=True)
+        self.output_choose_btn = QPushButton("Choose…", clicked=self._choose_output)
+        self.output_open_btn = QPushButton("Open", clicked=self._open_output)
+        self.output_clear_btn = QPushButton("Clear", clicked=lambda: self._set_output(""))
+        ob.addWidget(self.output_label, 1)
+        for b in (self.output_choose_btn, self.output_open_btn, self.output_clear_btn):
+            ob.addWidget(b)
+        video_l.addWidget(out_box)
+        self.output_hint = QLabel("Every finished video is also saved here as “Title (number).mp4”.",
+                                  objectName="muted", wordWrap=True)
+        video_l.addWidget(self.output_hint)
         video_l.addStretch()
 
         # ---- YouTube
@@ -224,6 +245,7 @@ class SettingsPage(QWidget):
         self.voice_sample.setText(Path(self._sample_path).name if self._sample_path else "No sample — default voice")
         self.music.setChecked(bool(cfg["background_music"]))
         self.quality_buttons.get(cfg["render_preset"], self.quality_buttons["slow"]).setChecked(True)
+        self._set_output(cfg.get("output_dir", ""))
         self.saved.clear()
 
     def save(self):
@@ -240,9 +262,41 @@ class SettingsPage(QWidget):
         cfg["voice_engine"] = self.voice_engine.currentData()
         cfg["voice_sample"] = self._sample_path
         cfg["background_music"] = self.music.isChecked()
+        cfg["output_dir"] = self._output_dir
         cfg["render_preset"] = next((p for p, b in self.quality_buttons.items() if b.isChecked()), "slow")
         settings.save(cfg)
         self.saved.setText("Saved · applies to the next render")
+
+    def _set_output(self, path: str):
+        self._output_dir = path or ""
+        self.output_label.setText(self._output_dir or "Not set — videos stay inside the app")
+        self.output_open_btn.setEnabled(bool(self._output_dir))
+        self.output_clear_btn.setEnabled(bool(self._output_dir))
+
+    def _choose_output(self):
+        start = self._output_dir or str(Path.home() / "Movies")
+        path = QFileDialog.getExistingDirectory(self, "Save finished videos to…", start)
+        if not path:
+            return
+        self._set_output(path)
+        with db.Session() as s:
+            finished = s.query(db.Story).filter(db.Story.status == "done").count()
+        if finished and QMessageBox.question(
+                self, "Copy existing videos?",
+                f"Copy your {finished} finished video{'s' if finished != 1 else ''} to this folder now?") \
+                == QMessageBox.Yes:
+            self.saved.setText("Copying videos…")
+            run_async(export.export_all, db.Session, path,
+                      on_done=lambda n: self.saved.setText(f"Copied {n} video{'s' if n != 1 else ''} · "
+                                                           "press Save changes to keep this folder"),
+                      on_error=lambda e: self.saved.setText(f"Copy failed: {e}"))
+        else:
+            self.saved.setText("Press Save changes to keep this folder")
+
+    def _open_output(self):
+        if self._output_dir:
+            Path(self._output_dir).mkdir(parents=True, exist_ok=True)
+            subprocess.run(["open", self._output_dir], check=False)
 
     def _pick_sample(self):
         path, _ = QFileDialog.getOpenFileName(self, "Voice sample (10–20 s of clear speech)", str(Path.home()),

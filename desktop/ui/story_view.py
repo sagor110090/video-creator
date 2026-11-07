@@ -275,7 +275,9 @@ class StoryView(QWidget):
         self.render_btn = QPushButton("Render", objectName="primary", clicked=self._render)
         self.rebuild_btn = QPushButton("Rebuild final video", clicked=self._rebuild)
         self.folder_btn = QPushButton("Open folder", clicked=self._open_folder)
-        for b in (self.rebuild_btn, self.folder_btn, self.render_btn):
+        self.reveal_btn = QPushButton("Show video", clicked=self._reveal_video,
+                                      toolTip="Show the finished video in Finder (your output folder copy if set)")
+        for b in (self.rebuild_btn, self.folder_btn, self.reveal_btn, self.render_btn):
             head.addWidget(b)
 
         self.steps = QLabel(objectName="steps")
@@ -358,6 +360,8 @@ class StoryView(QWidget):
                                      "done": "Render missing"}.get(st.status, "Rendering…"))
             self._update_steps(st)
             self.rebuild_btn.setEnabled(not busy and all(sc.clip_status == "done" for sc in st.scenes))
+            self._video = next((p for p in (st.export_path, st.final_path) if p and Path(p).exists()), None)
+            self.reveal_btn.setEnabled(bool(self._video))
             self.yt.refresh_status()
             if rows:
                 for sc in st.scenes:
@@ -443,6 +447,10 @@ class StoryView(QWidget):
         self.player.stop()
         self.bridge.submit_render(self.story_id)
         self.refresh()
+
+    def _reveal_video(self):
+        if getattr(self, "_video", None):
+            subprocess.run(["open", "-R", self._video], check=False)
 
     def _open_folder(self):
         subprocess.run(["open", str(paths.story_dir(self.story_id))], check=False)

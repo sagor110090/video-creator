@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Callable
 
 from desktop.core import db, paths
-from desktop.pipeline import images, render, voice
+from desktop.pipeline import export, images, render, voice
 
 Emit = Callable[[dict], None]
 
@@ -87,18 +87,29 @@ def _assemble(s, emit, story, cfg):
     story.final_path = str(out)
 
 
+def _export(story, cfg):
+    """Copy the finished video to the output folder from Settings, if one is set. Never fails the render."""
+    try:
+        export.export_story(story, cfg.get("output_dir"))
+    except OSError as e:
+        story.error = f"Video is ready, but copying it to your output folder failed: {e}"
+
+
 def _finish(s, emit, story, cfg, failed: int):
     if failed:
         story.error = f"{failed} of {len(story.scenes)} scenes failed"
         _story_event(emit, story, "failed")
     elif story.final_path and Path(story.final_path).exists():
         story.error = None
+        if cfg.get("output_dir") and not (story.export_path and Path(story.export_path).exists()):
+            _export(story, cfg)
         _story_event(emit, story, "done")
     else:
         emit({"type": "assemble", "story_id": story.id, "status": "running"})
         try:
             _assemble(s, emit, story, cfg)
             story.error = None
+            _export(story, cfg)
             _story_event(emit, story, "done")
         except Exception as e:
             story.error = f"assembly failed: {e}"

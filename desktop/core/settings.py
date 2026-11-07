@@ -17,6 +17,7 @@ DEFAULTS = {
     "voice_sample": "",
     "background_music": True,
     "render_preset": "slow",
+    "output_dir": "",                   # finished videos are also copied here ("" = off)
     "image_provider": "free",           # free | gemini | openrouter
     "openrouter_api_key": "",
     "openrouter_image_model": "google/gemini-2.5-flash-image",
