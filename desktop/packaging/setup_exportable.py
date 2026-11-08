@@ -3,6 +3,10 @@
 Run from the repo root:  desktop/.venv/bin/python desktop/packaging/setup_exportable.py py2app
 Output: dist/AI Video Creator.app (arm64). Requires desktop/packaging/bin/{ffmpeg,ffprobe}
 (arm64 static builds) — see the README note in packaging/.
+
+Note: the standalone bundle leaves out the Chatterbox voice-clone stack (torch, ~2 GB).
+Scenes then narrate with Edge voices. For your cloned voice, run from the code base instead:
+./run.sh  (or the alias build: setup_app.py py2app -A), which uses desktop/.venv.
 """
 import shutil
 import sys
