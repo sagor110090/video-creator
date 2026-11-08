@@ -26,15 +26,16 @@ def run_schedule(cfg, Session, schedule_id: int, now: datetime) -> int:
         sch = s.get(db.Schedule, schedule_id)
         sch.last_run_at, sch.last_error = now.date(), None
         s.commit()
-        topic, style, talking, ar, channel, sample, img_style = (
+        topic, style, talking, ar, channel, sample, img_style, character, provider = (
             sch.topic, sch.style, sch.talking_style or "none", sch.aspect_ratio, sch.channel_id,
-            sch.voice_sample, sch.image_style or "auto")
+            sch.voice_sample, sch.image_style or "auto", sch.character_image, sch.image_provider)
     try:
         # news styles fetch real headlines inside generate_story
         data = story_ai.generate_story(cfg, topic or "a random interesting story", style, ar, talking)
         return create_story(data.get("title") or topic, data["content"], style, talking, ar, cfg, yt=data,
                             schedule_id=schedule_id, channel_id=channel, publish_at=now,
-                            voice_sample=sample, image_style=img_style)
+                            voice_sample=sample, image_style=img_style, character_image=character,
+                            image_provider=provider)
     except Exception as e:
         with Session() as s:
             s.get(db.Schedule, schedule_id).last_error = str(e)

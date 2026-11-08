@@ -59,3 +59,19 @@ def test_bollywood_is_hindi():
 def test_word_targets():
     assert prompts.word_target("9:16") == (130, 160)
     assert prompts.word_target("16:9") == (500, 650)
+
+
+def test_picked_news_story_injects_context_for_any_style():
+    story = {"title": "Salman Khan trailer drops tomorrow", "source": "Dainik Bhaskar",
+             "published": "Sat, 07 Nov 2026", "link": "https://x",
+             "text": "The studio confirmed the trailer launches in theaters nationwide on Friday."}
+    p = prompts.build_story_prompt("salman", "facts", "9:16", "none", news_story=story, rng=random.Random(1))
+    assert "REAL NEWS (use only these facts)" in p
+    assert "- Salman Khan trailer drops tomorrow (Dainik Bhaskar, Sat, 07 Nov 2026)" in p
+    assert "theaters nationwide" in p
+
+
+def test_picked_news_story_without_article_text_is_headline_only():
+    story = {"title": "T", "source": "S", "published": "d", "link": "https://blocked"}
+    p = prompts.build_story_prompt("t", "story", "9:16", "none", news_story=story, rng=random.Random(1))
+    assert "- T (S, d)" in p

@@ -43,6 +43,8 @@ class Schedule(Base):
     last_error: Mapped[str | None] = mapped_column(Text)
     voice_sample: Mapped[str | None] = mapped_column(String)   # None = Settings default
     image_style: Mapped[str | None] = mapped_column(String, default="auto")
+    character_image: Mapped[str | None] = mapped_column(String)  # per-video AI character; None = none
+    image_provider: Mapped[str | None] = mapped_column(String)   # None = Settings; free | gemini | openrouter
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
@@ -57,6 +59,7 @@ class Story(Base):
     voice_sample: Mapped[str | None] = mapped_column(String)   # None = Settings default
     image_style: Mapped[str | None] = mapped_column(String, default="auto")
     image_provider: Mapped[str | None] = mapped_column(String)   # None = Settings; free | gemini | openrouter
+    character_image: Mapped[str | None] = mapped_column(String)   # per-video AI character; None = none
     status: Mapped[str] = mapped_column(String, default="draft")
     error: Mapped[str | None] = mapped_column(Text)
     final_path: Mapped[str | None] = mapped_column(String)

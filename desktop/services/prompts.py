@@ -151,7 +151,7 @@ def _bullets(items) -> str:
 
 
 def build_story_prompt(topic, style="story", aspect_ratio="16:9", talking_style="none", channel_name="",
-                       news=None, rng=random) -> str:
+                       news=None, news_story=None, rng=random) -> str:
     spec = STYLES.get(style, STYLES["story"])
     talk = TALKING_STYLES.get(talking_style or "none", TALKING_STYLES["none"])
     lo, hi = word_target(aspect_ratio)
@@ -187,7 +187,13 @@ def build_story_prompt(topic, style="story", aspect_ratio="16:9", talking_style=
         language = "\nLANGUAGE: write the whole script in HINDI, in Devanagari script.\n"
 
     news_block = ""
-    if kind == "news" and news:
+    if news_story:      # the user picked this story; its context beats auto-fetched headlines
+        line = f"- {news_story['title']} ({news_story.get('source') or 'news'}, " \
+               f"{news_story.get('published') or 'recent'})"
+        if news_story.get("text"):
+            line += f": {news_story['text']}"
+        news_block = "\nREAL NEWS (use only these facts):\n" + line + "\n"
+    elif kind == "news" and news:
         lines = [f"- {n['title']} ({n.get('source') or 'news'}, {n.get('published') or 'recent'}): "
                  f"{n.get('snippet') or ''}".strip() for n in news[:5]]
         news_block = "\nREAL NEWS (use only these facts):\n" + "\n".join(lines) + "\n"

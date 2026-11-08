@@ -1,5 +1,6 @@
 """Recurring schedules: a new AI story every day at a set time (optionally uploaded to a channel)."""
 from datetime import datetime
+from pathlib import Path
 
 from PySide6.QtCore import Qt, QTime
 from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QComboBox, QFormLayout, QFrame, QHBoxLayout,
@@ -11,8 +12,9 @@ from desktop.pipeline.images import IMAGE_STYLES
 from desktop.services import scheduler, story_ai
 from desktop.ui.tasks import run_async
 from desktop.ui.voice_picker import VoicePicker
+from desktop.ui.widgets import CharacterPicker, image_source_combo, settings_source_label
 
-COLUMNS = ["Topic", "Style", "Images", "Format", "Voice", "Daily at", "Channel", "Last run", "Status"]
+COLUMNS = ["Topic", "Style", "Images", "Format", "Voice", "Character", "Daily at", "Channel", "Last run", "Status"]
 
 
 class SchedulesPage(QWidget):
@@ -70,6 +72,14 @@ class SchedulesPage(QWidget):
         form.addRow("Format", fmt)
         self.voice = VoicePicker()
         form.addRow("Voice", self.voice)
+        self.character = CharacterPicker()
+        self.character.setToolTip("Optional: one clear face photo — the same person in every AI-generated "
+                                  "scene of this schedule's videos. Leave off for real celebrities.")
+        form.addRow("Character", self.character)
+        self.image_source = image_source_combo(settings_source_label())
+        self.image_source.setToolTip("Free sources, or paid AI images from Gemini / OpenRouter. "
+                                     "The character above needs Gemini or OpenRouter.")
+        form.addRow("Image source", self.image_source)
         form.addRow("Every day at", self.time)
         form.addRow("Upload to", self.channel)
         form.addRow("", self.add_btn)
@@ -101,6 +111,7 @@ class SchedulesPage(QWidget):
                           IMAGE_STYLES.get(sch.image_style or "auto", IMAGE_STYLES["auto"])["label"],
                           "Shorts" if sch.aspect_ratio == "9:16" else "16:9",
                           voices.display_name(sch.voice_sample) if sch.voice_sample else "Default",
+                          Path(sch.character_image).name if sch.character_image else "—",
                           sch.scheduled_time.strftime("%H:%M"), channels.get(sch.channel_id, "—"),
                           str(sch.last_run_at or "never"), status]
                 for c, v in enumerate(values):
@@ -125,7 +136,9 @@ class SchedulesPage(QWidget):
                               aspect_ratio="9:16" if self.shorts.isChecked() else "16:9",
                               scheduled_time=datetime.strptime(t.toString("HH:mm"), "%H:%M").time(),
                               channel_id=self.channel.currentData(), voice_sample=self.voice.value(),
-                              image_style=self.image_style.currentData(), status="active"))
+                              image_style=self.image_style.currentData(), status="active",
+                              character_image=self.character.value(),
+                              image_provider=self.image_source.currentData() or None))
             s.commit()
         self.topic.clear()
         self.message.setText("Schedule added.")

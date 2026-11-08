@@ -118,19 +118,49 @@ def test_image_prompts_map_indices_and_fall_back():
 
 
 @responses.activate
-def test_split_scenes_drops_short_and_appends_style_hint():
+def test_split_scenes_packs_sentences_and_appends_style_hint():
     _reply({"0": "celebrity red carpet", "1": "movie premiere crowd"})
     scenes = story_ai.split_scenes("Wow. The star arrived at the gala tonight! Fans outside went totally wild "
                                    "for her.", "hollywood_hype", "none", CFG)
-    assert [s["narration"] for s in scenes] == ["Wow. The star arrived at the gala tonight!",
-                                                 "Fans outside went totally wild for her."]
+    assert [s["narration"] for s in scenes] == ["Wow. The star arrived at the gala tonight! "
+                                                "Fans outside went totally wild for her."]
     assert scenes[0]["image_prompt"] == "celebrity red carpet, news celebrity"
+
+
+def test_scenes_pack_to_about_six_seconds():
+    # ~99 words of punchy shorts narration: pairs of short sentences become one ~16-word (~7s) scene
+    text = ("The storm hit us hard that October night. Waves taller than houses crashed against the rocks. "
+            "My father ran toward the old lighthouse tower. I followed him with a shaking lantern light. "
+            "The great lamp had died without any warning. Together we climbed the tower stairs in darkness. "
+            "My hands shook as I lit the backup flame. The tiny fire caught at the last moment. "
+            "Below us a fishing boat cleared the sharp rocks. The fisherman still visits our door every year. "
+            "He says we are his guardians from the sea. The sea never forgets and neither do we.")
+    scenes = [len(s["narration"].split()) for s in story_ai.split_scenes(text)]
+    assert 5 <= len(scenes) <= 7                       # was 12 scenes, one per sentence
+    assert all(13 <= w <= 21 for w in scenes)          # every scene is a real 6-7s shot, never a flash
+
+
+def test_tiny_tail_sentence_joins_previous_scene():
+    scenes = [s["narration"] for s in story_ai.split_scenes(
+        "Every morning the old fisherman walked slowly down to the harbor and checked his boat. "
+        "Then one day everything changed.")]
+    assert scenes == ["Every morning the old fisherman walked slowly down to the harbor and checked his boat. "
+                      "Then one day everything changed."]
 
 
 @responses.activate
 def test_topic_fallback():
     _reply("", status=500)
     assert story_ai.generate_topic(CFG, "", "science_short") == "Black Holes"
+
+
+@responses.activate
+def test_image_prompts_ask_for_detailed_descriptions():
+    _reply({"0": "x"})
+    story_ai.generate_image_prompts(CFG, ["The lighthouse stood alone on the cliff."])
+    prompt = json.loads(responses.calls[0].request.body)["messages"][1]["content"]
+    assert "text-to-image" in prompt and "lighting" in prompt and "composition" in prompt
+    assert "celebrity" in prompt          # real people: compose around them, never rely on the face
 
 
 @responses.activate
@@ -196,3 +226,20 @@ def test_split_merges_short_sentences_and_keeps_quotes():
 def test_talking_style_adds_no_image_hint():
     scenes = story_ai.split_scenes("The teddy bear blinked at me in the dark room.", "story", "storytime")
     assert "person talking" not in scenes[0]["image_prompt"]
+
+
+@responses.activate
+def test_generate_story_with_picked_news(monkeypatch):
+    monkeypatch.setattr(story_ai.news, "article",
+                        lambda link, **k: "The studio confirmed the trailer launches in theaters nationwide.")
+    def _boom(*a, **k):
+        raise AssertionError("auto headline fetch must be skipped when a story is picked")
+    monkeypatch.setattr(story_ai.news, "headlines", _boom)
+    _reply({"title": "T", "content": " ".join(["w"] * 140)})
+    out = story_ai.generate_story(CFG, "", "facts", "9:16", "none",
+                                  news_story={"title": "Salman trailer drops", "source": "Dainik Bhaskar",
+                                              "published": "Sat, 07 Nov 2026", "link": "https://x"})
+    prompt = json.loads(responses.calls[0].request.body)["messages"][1]["content"]
+    assert 'about: "Salman trailer drops"' in prompt       # empty topic fell back to the headline
+    assert "theaters nationwide" in prompt                  # fetched article text reached the prompt
+    assert out["title"] == "T"

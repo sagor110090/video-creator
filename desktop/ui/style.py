@@ -25,7 +25,7 @@ BADGES = {"done": ("Done", "#0f3d2e", "#34d399"), "rendering": ("Rendering", "#1
 
 QSS = f"""
 * {{ font-family: "Helvetica Neue", Arial; font-size: 13px; color: {TEXT}; }}
-QMainWindow, QWidget#page, QWidget#root, QScrollArea, QScrollArea > QWidget > QWidget {{ background: {BG}; }}
+QMainWindow, QDialog, QMessageBox, QWidget#page, QWidget#root, QScrollArea, QScrollArea > QWidget > QWidget {{ background: {BG}; }}
 QToolTip {{ background: {PANEL_TOP}; color: {TEXT}; border: 1px solid {LINE}; padding: 4px; }}
 
 /* sidebar */

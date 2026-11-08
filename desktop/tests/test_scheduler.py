@@ -8,10 +8,10 @@ from desktop.services import scheduler, stats
 NOW = datetime(2026, 11, 7, 9, 30)
 
 
-def _schedule(Session, t="09:00", last_run=None, status="active", style="story", channel_id=None):
+def _schedule(Session, t="09:00", last_run=None, status="active", style="story", channel_id=None, **extra):
     with Session() as s:
         sch = db.Schedule(topic="space", style=style, aspect_ratio="9:16", scheduled_time=time.fromisoformat(t),
-                          last_run_at=last_run, status=status, channel_id=channel_id)
+                          last_run_at=last_run, status=status, channel_id=channel_id, **extra)
         s.add(sch)
         s.commit()
         return sch.id
@@ -52,7 +52,7 @@ def test_run_schedule_creates_story(Session, fake_ai):
     with Session() as s:
         st = s.get(db.Story, story_id)
         assert (st.title, st.schedule_id, st.channel_id, st.aspect_ratio) == ("Space Title", sid, ch_id, "9:16")
-        assert st.youtube_title == "YT" and st.publish_at == NOW and len(st.scenes) == 2
+        assert st.youtube_title == "YT" and st.publish_at == NOW and len(st.scenes) == 1
         sch = s.get(db.Schedule, sid)
         assert sch.last_run_at == NOW.date() and sch.last_error is None
     assert fake_ai["topic"] == "space"
@@ -136,3 +136,17 @@ def test_schedule_image_style_copied_to_story(Session, fake_ai):
     story_id = scheduler.run_schedule({}, Session, sid, NOW)
     with Session() as s:
         assert s.get(db.Story, story_id).image_style == "cartoon"
+
+
+def test_run_schedule_passes_character(Session, fake_ai):
+    sid = _schedule(Session, character_image="/lib/host.jpg")
+    story_id = scheduler.run_schedule({}, Session, sid, NOW)
+    with Session() as s:
+        assert s.get(db.Story, story_id).character_image == "/lib/host.jpg"
+
+
+def test_run_schedule_passes_image_provider(Session, fake_ai):
+    sid = _schedule(Session, image_provider="openrouter")
+    story_id = scheduler.run_schedule({}, Session, sid, NOW)
+    with Session() as s:
+        assert s.get(db.Story, story_id).image_provider == "openrouter"

@@ -206,3 +206,52 @@ def test_openrouter_without_key_skips_to_free(tmp_path):
     cfg = {**CFG, "image_provider": "openrouter", "openrouter_api_key": "", "image_sources": "placeholder"}
     hit = images.fetch_scene_image("x", tmp_path / "i.jpg", "16:9", cfg)
     assert hit.source == "placeholder" and "no OpenRouter API key" in hit.note
+
+
+def test_ai_sources_get_full_prompt_stock_gets_short_query(tmp_path, monkeypatch):
+    seen = []
+
+    def fake(name):
+        def fn(q, out, ar, cfg):
+            seen.append((name, q))
+            return None if name == "pexels" else images.placeholder(out, ar)  # stock misses, AI hits
+        return fn
+    for n in ("pexels", "pollinations"):
+        monkeypatch.setitem(images.SOURCES, n, fake(n))
+    cfg = {**CFG, "image_sources": "pexels,pollinations"}
+    prompt = " ".join(f"word{i}" for i in range(20))
+    images.fetch_scene_image(prompt, tmp_path / "i.jpg", "16:9", cfg)
+    got = dict(seen)
+    assert len(got["pollinations"].split()) == 20       # AI generator: the full detailed prompt
+    assert len(got["pexels"].split()) == 8              # stock sites: short keyword query
+
+
+@responses.activate
+def test_openrouter_sends_character_reference_and_consistency_prompt(tmp_path):
+    responses.add(responses.POST, "https://openrouter.ai/api/v1/images",
+                  json={"data": [{"b64_json": _b64_jpeg()}]})
+    ref = tmp_path / "me.jpg"
+    ref.write_bytes(_jpeg(512, 512))
+    cfg = {**CFG, "image_provider": "openrouter", "openrouter_api_key": "or-key",
+           "character_image": str(ref)}
+    out = tmp_path / "i.jpg"
+    hit = images.fetch_scene_image("host standing on a beach at sunset", out, "9:16", cfg)
+    assert hit.source == "openrouter"
+    body = json.loads(responses.calls[0].request.body)
+    assert body["input_references"][0]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+    assert "same person" in body["prompt"].lower()
+
+
+@responses.activate
+def test_openrouter_without_character_sends_no_image_field(tmp_path):
+    responses.add(responses.POST, "https://openrouter.ai/api/v1/images",
+                  json={"data": [{"b64_json": _b64_jpeg()}]})
+    cfg = {**CFG, "image_provider": "openrouter", "openrouter_api_key": "or-key"}
+    images.fetch_scene_image("a beach", tmp_path / "i.jpg", "9:16", cfg)
+    body = json.loads(responses.calls[0].request.body)
+    assert "input_references" not in body and "same person" not in body["prompt"].lower()
+
+
+def test_character_ref_missing_file_is_ignored():
+    assert images._character_ref({"character_image": "/nope/missing.jpg"}) is None
+    assert images._character_ref({}) is None

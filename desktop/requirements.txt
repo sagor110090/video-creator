@@ -24,3 +24,5 @@ setuptools<81  # resemble-perth needs pkg_resources
 pytest
 responses
 pytest-qt
+googlenewsdecoder
+readability-lxml

@@ -206,7 +206,8 @@ def upload(cfg, Session, story_id: int, progress=None) -> str:
         tags = [t.strip() for t in (st.youtube_tags or "").split(",") if t.strip()]
         meta = {"snippet": {"title": (st.youtube_title or st.title or "Untitled")[:100],
                             "description": st.youtube_description or st.content, "tags": tags},
-                "status": {"privacyStatus": "private" if future else "public", "selfDeclaredMadeForKids": False}}
+                "status": {"privacyStatus": "private" if future else "public", "selfDeclaredMadeForKids": False,
+                           "containsSyntheticMedia": True}}   # every video is AI-made: disclose at platform level
         path, channel_id = Path(st.final_path), st.channel_id
         ch = s.get(db.Channel, st.channel_id)
         channel_title = ch.title if ch else "your channel"

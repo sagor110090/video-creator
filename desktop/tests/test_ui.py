@@ -63,7 +63,7 @@ def seeded(Session, data_dir):
 def test_dashboard_write_with_ai_and_create(qtbot, Session, bridge, monkeypatch):
     from desktop.ui import dashboard
     monkeypatch.setattr(dashboard.story_ai, "generate_story",
-                        lambda cfg, topic, style, ar, ts: {"title": "AI Title", "content": "The alpha scene happens right here today. The beta scene follows right after that."})
+                        lambda cfg, topic, style, ar, ts, news_story=None: {"title": "AI Title", "content": "The alpha scene happens right here today. The beta scene follows right after that."})
     monkeypatch.setattr(dashboard.story_ai, "generate_image_prompts", lambda cfg, n, *style: [f"prompt {i}" for i in range(len(n))])
     opened = []
     page = dashboard.DashboardPage(bridge, open_story=opened.append)
@@ -76,7 +76,7 @@ def test_dashboard_write_with_ai_and_create(qtbot, Session, bridge, monkeypatch)
     qtbot.waitUntil(lambda: bool(opened), timeout=5000)
     with Session() as s:
         st = s.get(db.Story, opened[0])
-        assert st.title == "AI Title" and len(st.scenes) == 2
+        assert st.title == "AI Title" and len(st.scenes) == 1
         assert st.scenes[0].image_prompt == "prompt 0"
     assert bridge.renders == [opened[0]]
     assert page.stories.count() == 1
@@ -85,7 +85,7 @@ def test_dashboard_write_with_ai_and_create(qtbot, Session, bridge, monkeypatch)
 def test_dashboard_shows_error_without_crashing(qtbot, Session, bridge, monkeypatch):
     from desktop.ui import dashboard
 
-    def fail(*a):
+    def fail(*a, **k):
         raise dashboard.story_ai.StoryAIError("No API key for deepseek. Add it in Settings.")
     monkeypatch.setattr(dashboard.story_ai, "generate_story", fail)
     page = dashboard.DashboardPage(bridge, open_story=lambda i: None)
@@ -232,7 +232,7 @@ def test_dashboard_next_starts_review(qtbot, Session, bridge, monkeypatch):
     qtbot.waitUntil(lambda: bool(opened), timeout=5000)
     with Session() as s:
         st = s.get(db.Story, opened[0])
-        assert st.image_provider == "openrouter" and len(st.scenes) == 2
+        assert st.image_provider == "openrouter" and len(st.scenes) == 1
     assert bridge.reviews == [opened[0]] and bridge.renders == []
 
 
@@ -374,3 +374,100 @@ def test_create_form_fits_width(qtbot, Session, bridge, w, h):
     assert d.form_scroll.widget().width() <= viewport + 1          # nothing cut off on the right
     for b in (d.shorts, d.landscape):
         assert b.width() >= b.sizeHint().width() - 1               # format labels not truncated
+
+
+def test_news_pick_shows_chip_and_write_uses_story(qtbot, Session, bridge, monkeypatch):
+    from desktop.ui import dashboard
+    page = dashboard.DashboardPage(bridge, open_story=lambda _id: None)
+    qtbot.addWidget(page)
+    assert page._news_story is None and page.news_chip.isHidden()
+
+    page._news_selected({"title": "Salman trailer drops tomorrow", "source": "Dainik Bhaskar",
+                         "published": "Sat, 07 Nov 2026", "link": "https://x"})
+    assert page._news_story["source"] == "Dainik Bhaskar"
+    assert not page.news_chip.isHidden() and "Salman" in page.news_label.text()
+
+    seen = {}
+    monkeypatch.setattr(dashboard.story_ai, "generate_story",
+                        lambda cfg, topic, style, ar, ts, news_story=None:
+                        seen.update(topic=topic, news_story=news_story)
+                        or {"title": "T", "content": "a fine script body with enough words inside"})
+    page.write_btn.click()                                    # topic field is empty — the chip is the topic
+    qtbot.waitUntil(lambda: "news_story" in seen, timeout=5000)
+    assert seen["topic"] == "Salman trailer drops tomorrow"  # headline filled the empty topic
+    assert seen["news_story"]["link"] == "https://x"
+
+    page.news_clear.click()
+    assert page._news_story is None and page.news_chip.isHidden()
+
+
+def test_write_still_requires_topic_without_story(qtbot, Session, bridge):
+    from desktop.ui import dashboard
+    page = dashboard.DashboardPage(bridge, open_story=lambda _id: None)
+    qtbot.addWidget(page)
+    page.write_btn.click()
+    assert "topic" in page.error.text().lower()
+
+
+def test_news_picker_dialog_search_and_pick(qtbot, monkeypatch):
+    from desktop.ui import dashboard
+    monkeypatch.setattr(dashboard.news, "headlines",
+                        lambda q, style, limit=5, days=7: [
+                            {"title": "Salman trailer drops", "source": "Dainik Bhaskar",
+                             "published": "Sat, 07 Nov 2026", "link": "https://x"},
+                            {"title": "Second story", "source": "AajTak",
+                             "published": "Fri, 06 Nov 2026", "link": "https://y"}])
+    dlg = dashboard.NewsPickerDialog(initial="salman", style_key="bollywood_masala")
+    qtbot.addWidget(dlg)
+    qtbot.waitUntil(lambda: dlg.list.count() == 2, timeout=5000)     # initial search auto-ran
+    assert "2 stories" in dlg.status.text()
+    dlg.list.setCurrentRow(0)
+    assert dlg.selected()["title"] == "Salman trailer drops"
+
+
+def test_create_passes_character_picker_value(qtbot, Session, bridge, monkeypatch, tmp_path):
+    import io
+    from PIL import Image
+    from desktop.ui import dashboard
+    seen = {}
+    monkeypatch.setattr(dashboard, "create_story", lambda *a, **k: seen.update(k) or 1)
+    page = dashboard.DashboardPage(bridge, open_story=lambda _id: None)
+    qtbot.addWidget(page)
+    assert page.character.value() is None                      # off by default: news videos stay clean
+
+    ref = tmp_path / "host.jpg"
+    buf = io.BytesIO()
+    Image.new("RGB", (300, 300), (9, 90, 9)).save(buf, "JPEG")
+    ref.write_bytes(buf.getvalue())
+    page.character.setValue(str(ref))
+    page.script.setPlainText("A fine little script for one scene.")
+    page.create_btn.click()
+    qtbot.waitUntil(lambda: "character_image" in seen, timeout=5000)
+    assert seen["character_image"] == str(ref)
+
+def test_schedule_add_saves_character(qtbot, Session, bridge, tmp_path):
+    import io
+    from PIL import Image
+    from desktop.ui.schedules_page import SchedulesPage
+    sp = SchedulesPage(bridge)
+    qtbot.addWidget(sp)
+    ref = tmp_path / "host.jpg"
+    buf = io.BytesIO()
+    Image.new("RGB", (300, 300), (9, 90, 9)).save(buf, "JPEG")
+    ref.write_bytes(buf.getvalue())
+    sp.character.setValue(str(ref))
+    sp.topic.setText("space")
+    sp._add()
+    with Session() as s:
+        assert s.query(db.Schedule).one().character_image == str(ref)
+
+
+def test_schedule_add_saves_image_provider(qtbot, Session, bridge):
+    from desktop.ui.schedules_page import SchedulesPage
+    sp = SchedulesPage(bridge)
+    qtbot.addWidget(sp)
+    sp.image_source.setCurrentIndex(sp.image_source.findData("openrouter"))
+    sp.topic.setText("space")
+    sp._add()
+    with Session() as s:
+        assert s.query(db.Schedule).one().image_provider == "openrouter"

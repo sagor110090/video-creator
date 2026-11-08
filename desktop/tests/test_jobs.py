@@ -136,6 +136,21 @@ def test_render_uses_story_image_style(Session, story_id, monkeypatch):
     assert styles == ["cartoon", "cartoon"]
 
 
+def test_render_passes_story_character_to_images(Session, story_id, monkeypatch):
+    refs = []
+    real = jobs.images.fetch_scene_image
+
+    def spy(prompt, out, ar, cfg, previous_image=None, image_style="auto"):
+        refs.append(cfg.get("character_image"))
+        return real(prompt, out, ar, cfg, previous_image=previous_image, image_style=image_style)
+    monkeypatch.setattr(jobs.images, "fetch_scene_image", spy)
+    with Session() as s:
+        s.get(db.Story, story_id).character_image = "/char/host.jpg"
+        s.commit()
+    jobs.render_story(Session, story_id, lambda e: None, CFG, voice.StubEngine())
+    assert refs == ["/char/host.jpg", "/char/host.jpg"]    # the video's character reaches every scene
+
+
 def test_image_fallback_note_kept_on_scene(Session, story_id, monkeypatch):
     real = jobs.images.fetch_scene_image
 

@@ -40,6 +40,7 @@ def _run_stage(scene, stage, story, cfg, engine, previous_image):
         provider = scene.image_provider or story.image_provider      # per-scene, then per-story, then Settings
         if provider:
             cfg = dict(cfg, image_provider=provider)
+        cfg = dict(cfg, character_image=story.character_image)       # per-video character; None = no one
         hit = images.fetch_scene_image(scene.image_prompt or scene.narration, out, story.aspect_ratio, cfg,
                                        previous_image=previous_image,
                                        image_style=images.resolve_style(story.image_style, story.style))

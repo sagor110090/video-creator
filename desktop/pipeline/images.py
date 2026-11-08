@@ -227,9 +227,26 @@ class OpenRouterError(PaidImageError):
     provider = "OpenRouter"
 
 
+def _character_ref(cfg) -> str | None:
+    """Data-URI of the optional character reference photo (None when unset or unreadable) — the same
+    person then appears in every AI-generated scene, like a consistent channel host."""
+    path = cfg.get("character_image") or ""
+    if not path:
+        return None
+    try:
+        data = Path(path).read_bytes()
+    except OSError:
+        return None
+    return "data:image/jpeg;base64," + base64.b64encode(data).decode() if 0 < len(data) < 8_000_000 else None
+
+
 def _styled_prompt(q, cfg) -> str:
     style = cfg.get("_ai_suffix") or "realistic photo, natural lighting"
-    return f"{q}. Visual style: {style}. A single image for a video scene, with no text, captions, logos or watermarks."
+    p = f"{q}. Visual style: {style}. A single image for a video scene, with no text, captions, logos or watermarks."
+    if _character_ref(cfg):
+        p += (" Include the SAME person as in the attached reference photo — same face, same identity — "
+              "placed naturally into this scene.")
+    return p
 
 
 def _find_image_b64(obj):
@@ -293,6 +310,9 @@ def _openrouter(q, out, ar, cfg):
         raise OpenRouterError("no OpenRouter API key in Settings")
     body = {"model": cfg.get("openrouter_image_model") or "google/gemini-2.5-flash-image",
             "prompt": _styled_prompt(q, cfg), "n": 1, "aspect_ratio": "16:9" if ar == "16:9" else "9:16"}
+    ref = _character_ref(cfg)                              # optional: keep one person in every scene
+    if ref:
+        body["input_references"] = [{"type": "image_url", "image_url": {"url": ref}}]
     res = requests.post(OPENROUTER_URL, json=body, timeout=180, headers={
         "Authorization": f"Bearer {key}", "Content-Type": "application/json",
         "X-Title": "AI Video Creator"})
@@ -351,7 +371,12 @@ def _try_sources(query: str, out: Path, ar: str, cfg: dict) -> ImageHit | None:
         fn = SOURCES.get(name)
         if fn is None:
             continue
-        q = query if name in AI_SOURCES or not stock_words else f"{stock_words} {query}"
+        if name in AI_SOURCES:
+            q = query                                     # generators: the full detailed prompt
+        else:
+            q = _clean_query(query)                       # stock sites search better on few words
+            if stock_words:
+                q = f"{stock_words} {q}"
         try:
             hit = fn(q, out, ar, cfg)
             if hit:
@@ -371,7 +396,7 @@ def fetch_scene_image(prompt: str, out, aspect_ratio: str, cfg: dict, previous_i
     cfg = dict(cfg, _prefer_ai=st.get("prefer_ai", False), _stock_words=st.get("stock_words"),
                _ai_suffix=st.get("ai_suffix"), _pixabay_type=st.get("pixabay_type", "photo"),
                _openverse_category=st.get("openverse_category"))
-    queries = [_clean_query(prompt), extract_keywords(prompt, 3), "cinematic background"]
+    queries = [prompt.replace('"', "").strip(), extract_keywords(prompt, 3), "cinematic background"]
     def noted(hit):
         errors = list(dict.fromkeys(cfg.get("_errors", [])))
         hit.note = "; ".join(errors) or None

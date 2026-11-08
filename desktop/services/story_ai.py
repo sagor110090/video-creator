@@ -139,9 +139,9 @@ def generate_topic(cfg, context: str, style: str = "story") -> str:
 # ---------------------------------------------------------------- story
 
 def build_story_prompt(topic, style="story", aspect_ratio="16:9", talking_style="none", channel_name="",
-                       news_items=None, rng=random) -> str:
+                       news_items=None, news_story=None, rng=random) -> str:
     return prompts.build_story_prompt(topic, style, aspect_ratio, talking_style, channel_name=channel_name,
-                                      news=news_items, rng=rng)
+                                      news=news_items, news_story=news_story, rng=rng)
 
 
 def _expand(cfg, content, style, aspect_ratio) -> str:
@@ -158,12 +158,19 @@ def _expand(cfg, content, style, aspect_ratio) -> str:
     return longer if len(longer.split()) > len(content.split()) else content
 
 
-def generate_story(cfg, topic, style="story", aspect_ratio="16:9", talking_style="none", news_items=None) -> dict:
+def generate_story(cfg, topic, style="story", aspect_ratio="16:9", talking_style="none", news_items=None,
+                   news_story=None) -> dict:
     spec = prompts.STYLES.get(style, prompts.STYLES["story"])
-    if spec["kind"] == "news" and news_items is None:
+    if news_story:                                       # a story the user picked: fetch its article text
+        news_story = dict(news_story)
+        news_story["text"] = news.article(news_story.get("link") or "",      # '' when the site blocks us
+                                          title=news_story["title"])         # or the page is nav junk
+        topic = topic or news_story["title"]             # the headline is the topic when none was typed
+    elif spec["kind"] == "news" and news_items is None:
         news_items = news.headlines(topic, style)        # real headlines; [] if offline
     prompt = build_story_prompt(topic, style, aspect_ratio, talking_style,
-                                channel_name=(cfg.get("channel_name") or "").strip(), news_items=news_items)
+                                channel_name=(cfg.get("channel_name") or "").strip(),
+                                news_items=news_items, news_story=news_story)
     data = _json(chat(cfg, prompts.STORY_SYSTEM, prompt, 0.9))
     content = (data.get("content") or "").strip()
     lo, _hi = prompts.word_target(aspect_ratio)
@@ -234,23 +241,25 @@ def generate_image_prompts(cfg, narrations: list[str], image_style: str = "auto"
     for start in range(0, len(narrations), 20):
         chunk = narrations[start:start + 20]
         prompt = f"""You are a visual director for a video production.
-For each of the following narration segments, generate a precise, high-quality image search query.
-- The query will be used to search for stock footage/photos (Pexels, Unsplash).
-- Extract the main visual subject.
-- Focus on nouns, setting, and action.
-- REMOVE conversational filler (e.g. 'Imagine if', 'So', 'Basically').
-- If the text is abstract, provide a metaphorical visual (e.g. 'Stock market crash' -> 'Red graph arrow going down').
-- Output specific keywords (e.g. 'Golden retriever running grass' instead of 'A dog running').{style_rule}
+For each narration segment below, write ONE detailed prompt for an AI text-to-image model.
+- Describe what the camera sees: subject, action, setting, and mood.
+- Add lighting, camera angle, and composition (e.g. 'low-angle shot', 'soft morning light', 'close-up').
+- REMOVE conversational filler (e.g. 'Imagine if', 'So', 'Basically') and anything abstract or unseen.
+- If the text is abstract, paint its metaphor (e.g. 'Stock market crash' -> 'red arrow plunging off a cliff edge over a city of glowing graphs').
+- REAL PEOPLE: image models cannot draw a real celebrity's face, so never make a recognizable face the point.
+  Keep the name near the start (it helps photo search), but compose the shot around what does render — the
+  crowd, venue, banners, stage, cake, trophy — or a generic star seen from behind, hands waving, silhouette.
+- 20-35 words, vivid and concrete — every word must be something the eye can see.{style_rule}
 
 INPUT NARRATIONS:
 {json.dumps(chunk, ensure_ascii=False)}
 
-Format your response as a JSON object where keys are the indices (0, 1, 2...) matching the input array order, and values are the search prompts.
+Format your response as a JSON object where keys are the indices (0, 1, 2...) matching the input array order, and values are the image prompts.
 Example:
 {{
-    "0": "futuristic city skyline night",
-    "1": "scientist looking at microscope",
-    "2": "bitcoin gold coin pile"
+    "0": "futuristic city skyline at night, rain-slicked streets reflecting neon signs, wide-angle shot, moody blue and magenta lighting",
+    "1": "scientist in a white coat leaning into a microscope, shallow depth of field, cool laboratory light, close-up",
+    "2": "pile of golden coins on a black desk, single warm spotlight, macro shot, dramatic shadows"
 }}"""
         try:
             data = _json(chat(cfg, "You are an expert visual prompt engineer. Output ONLY valid JSON.", prompt, 0.7))
@@ -291,29 +300,34 @@ def _sentences(text: str) -> list[str]:
     return [s for s in out if s]
 
 
-def _merge_short(sentences: list[str], min_words: int = 6, max_words: int = 40) -> list[str]:
-    """Tiny sentences ('I sped up.') become part of the next one so no scene is a 1-second flash."""
-    scenes, carry = [], ""
+def _merge_scenes(sentences: list[str], target_words: int = 15, min_words: int = 10,
+                  max_words: int = 30) -> list[str]:
+    """Sentences are packed into scenes of about target_words (~6-7s of narration each) so every image
+    gets a real shot, never a 1-second flash and never a marathon."""
+    scenes, cur, count = [], [], 0
     for s in sentences:
-        cur = f"{carry} {s}".strip() if carry else s
-        if len(cur.split()) < min_words:
-            carry = cur
-            continue
-        scenes.append(cur)
-        carry = ""
-    if carry:
-        if scenes and len(scenes[-1].split()) + len(carry.split()) <= max_words:
-            scenes[-1] = f"{scenes[-1]} {carry}"
+        words = len(s.split())
+        if cur and count + words > target_words and (count >= min_words or count + words > max_words):
+            scenes.append(" ".join(cur))               # long enough already; this sentence starts a new scene
+            cur, count = [], 0
+        cur.append(s)
+        count += words
+        if count >= target_words:
+            scenes.append(" ".join(cur))
+            cur, count = [], 0
+    if cur:                                            # leftover tail too short to stand on its own
+        if scenes and count < min_words and len(scenes[-1].split()) + count <= max_words:
+            scenes[-1] += " " + " ".join(cur)
         else:
-            scenes.append(carry)
+            scenes.append(" ".join(cur))
     return scenes
 
 
 def split_scenes(content: str, style: str = "story", talking_style: str = "none", cfg=None,
                  max_scenes: int = 50, image_style: str = "auto") -> list[dict]:
-    """Sentences become scenes (short ones merged, quotes kept whole); image prompts come from the AI."""
+    """Sentences are packed into ~6-7s scenes (quotes kept whole); image prompts come from the AI."""
     text = re.sub(r"\s+", " ", content).strip()
-    sentences = _merge_short([s for s in _sentences(text) if len(s) >= 2])[:max_scenes]
+    sentences = _merge_scenes([s for s in _sentences(text) if len(s) >= 2])[:max_scenes]
     prompts_ = (generate_image_prompts(cfg, sentences, image_style) if cfg and sentences
                 else [clean_image_prompt(s) for s in sentences])
     hint = STYLE_HINTS.get(style, "") if image_style in (None, "auto") else ""

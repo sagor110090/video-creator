@@ -3,21 +3,23 @@ import subprocess
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QSize, Qt, QTimer
-from PySide6.QtGui import QPainter, QPainterPath, QPixmap
-from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QComboBox, QFrame, QGridLayout, QHBoxLayout, QInputDialog, QLabel,
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QFrame,
+                               QGridLayout, QHBoxLayout, QInputDialog, QLabel,
                                QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea,
-                               QSizePolicy, QToolButton, QVBoxLayout, QWidget)
+                               QSizePolicy, QStyledItemDelegate, QStyle, QToolButton, QVBoxLayout, QWidget)
 
 from desktop.core import db, paths, settings
 from desktop.pipeline.images import IMAGE_STYLES
+from desktop.services import news
 from desktop.services import story_ai
 from desktop.services import stories
 from desktop.services.stories import create_story
 from desktop.ui import icons
-from desktop.ui.style import ACCENT, MUTED, badge_style, glow
+from desktop.ui.style import ACCENT, ACCENT_TEXT, MUTED, TEXT, badge_style, glow
 from desktop.ui.tasks import run_async
 from desktop.ui.voice_picker import VoicePicker
-from desktop.ui.widgets import image_source_combo, settings_source_label
+from desktop.ui.widgets import CharacterPicker, image_source_combo, settings_source_label
 
 SCRIPT_LIMIT = 5000
 STATUS_FILTERS = [("All stories", ""), ("Done", "done"), ("Rendering", "rendering"), ("Review images", "review"),
@@ -177,6 +179,122 @@ class StoryCard(QFrame):
         self.style().polish(self)
 
 
+class _HeadlineDelegate(QStyledItemDelegate):
+    """One headline per row as a story-card: title + muted source/date line, accent frame when selected."""
+
+    def sizeHint(self, option, index):
+        return QSize(option.rect.width() if option.rect.width() else 400, 56)
+
+    def paint(self, painter, option, index):
+        h = index.data(Qt.UserRole) or {}
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing)
+        r = option.rect.adjusted(2, 3, -2, -3)
+        selected = bool(option.state & QStyle.State_Selected)
+        hovered = bool(option.state & QStyle.State_MouseOver) and not selected
+        painter.setBrush(QColor("#13306f" if selected else "#0d1a3d"))
+        painter.setPen(QPen(QColor(ACCENT if selected else "#2c4a99" if hovered else "#22397a"), 1))
+        painter.drawRoundedRect(r, 10, 10)
+
+        title_font, meta_font = QFont(option.font), QFont(option.font)
+        title_font.setWeight(QFont.DemiBold)
+        title_font.setPixelSize(14)
+        meta_font.setPixelSize(12)
+        painter.setFont(title_font)
+        painter.setPen(QColor("#e6edff"))
+        painter.drawText(r.adjusted(12, 8, -12, -26), Qt.TextSingleLine,
+                         QFontMetrics(title_font).elidedText(h.get("title", ""), Qt.ElideRight, r.width() - 24))
+        painter.setFont(meta_font)
+        painter.setPen(QColor(MUTED))
+        meta = "  ·  ".join(x for x in (h.get("source"), h.get("published")) if x) or "news"
+        painter.drawText(r.adjusted(12, 30, -12, -8), Qt.TextSingleLine,
+                         QFontMetrics(meta_font).elidedText(meta, Qt.ElideRight, r.width() - 24))
+        painter.restore()
+
+
+class NewsPickerDialog(QDialog):
+    """Search real Google News headlines and pick one; the picked story becomes the script's context."""
+
+    def __init__(self, parent=None, initial="", style_key=""):
+        super().__init__(parent)
+        self.setWindowTitle("Find News")
+        self.setMinimumSize(640, 520)
+        self._items, self._style = [], style_key
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(22, 18, 22, 18)
+        lay.setSpacing(10)
+
+        head = QHBoxLayout()
+        head.addWidget(_icon_label("search", ACCENT, 18))
+        title_col = QVBoxLayout()
+        title_col.setSpacing(0)
+        title_col.addWidget(QLabel("Find News", objectName="h2"))
+        title_col.addWidget(QLabel("Real Google News headlines from the last 7 days — pick a story for your next video.",
+                                   objectName="muted"))
+        head.addLayout(title_col, 1)
+        lay.addLayout(head)
+
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        self.query = QLineEdit(initial or "", placeholderText="Search news — e.g. Salman Khan, stock market, cricket")
+        self.query.setFixedHeight(38)
+        self.query.returnPressed.connect(self._search)
+        self.search_btn = QPushButton(" Search", objectName="primary")
+        self.search_btn.setFixedHeight(38)
+        self.search_btn.setIcon(icons.icon("search", "#ffffff", 16))
+        self.search_btn.clicked.connect(self._search)
+        row.addWidget(self.query, 1)
+        row.addWidget(self.search_btn)
+        lay.addLayout(row)
+
+        self.list = QListWidget()
+        self.list.setCursor(Qt.PointingHandCursor)
+        self.list.setItemDelegate(_HeadlineDelegate(self.list))
+        self.list.itemDoubleClicked.connect(lambda _item: self.accept())
+        lay.addWidget(self.list, 1)
+
+        self.status = QLabel("Search real headlines from the last 7 days, then pick one.")
+        self.status.setObjectName("muted")
+        lay.addWidget(self.status)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        ok = buttons.button(QDialogButtonBox.Ok)
+        ok.setText("Use This Story")
+        ok.setObjectName("primary")
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        lay.addWidget(buttons)
+        if initial:
+            self._search()
+
+    def _search(self):
+        q = self.query.text().strip()
+        if not q:
+            return
+        self.search_btn.setEnabled(False)
+        self.status.setText("Searching…")
+        run_async(news.headlines, q, self._style, on_done=self._done, on_error=self._failed, limit=10)
+
+    def _done(self, items):
+        self.search_btn.setEnabled(True)
+        self._items = items or []
+        self.list.clear()
+        for h in self._items:
+            item = QListWidgetItem(h["title"])          # text for accessibility; the delegate paints the card
+            item.setData(Qt.UserRole, h)
+            self.list.addItem(item)
+        self.status.setText(f"{len(self._items)} stories found — click one, then Use This Story (or double-click)."
+                            if self._items else "No news found — try another search.")
+
+    def _failed(self, e):
+        self.search_btn.setEnabled(True)
+        self.status.setText(f"Search failed: {e}")
+
+    def selected(self) -> dict | None:
+        row = self.list.currentRow()
+        return self._items[row] if 0 <= row < len(self._items) else None
+
+
 class DashboardPage(QWidget):
     def __init__(self, bridge, open_story):
         super().__init__(objectName="page")
@@ -291,6 +409,24 @@ class DashboardPage(QWidget):
         self.topic = QLineEdit(placeholderText="What is the video about? e.g. The Man Who Sold the Eiffel Tower")
         form.addWidget(self.topic)
 
+        self._news_story = None
+        self.news_chip = QFrame(objectName="newsChip")
+        self.news_chip.setStyleSheet(
+            f"QFrame#newsChip {{ background: #0d1a3d; border: 1px solid #1a2d63; border-radius: 10px; }}"
+            f"QFrame#newsChip QLabel {{ color: {TEXT}; border: none; background: transparent; }}"
+            f"QFrame#newsChip QLabel#chipSource {{ color: {ACCENT_TEXT}; font-weight: 600; }}"
+            f"QFrame#newsChip QPushButton {{ color: {MUTED}; border: none; background: transparent; font-weight: 700; }}"
+            f"QFrame#newsChip QPushButton:hover {{ color: #f87171; }}")
+        chip = QHBoxLayout(self.news_chip)
+        chip.setContentsMargins(10, 6, 8, 6)
+        self.news_label = QLabel(wordWrap=True)
+        self.news_clear = QPushButton("✕", flat=True, cursor=Qt.PointingHandCursor, toolTip="Remove this news story")
+        self.news_clear.clicked.connect(self._clear_news)
+        chip.addWidget(self.news_label, 1)
+        chip.addWidget(self.news_clear)
+        self.news_chip.hide()
+        form.addWidget(self.news_chip)
+
         self.style = QComboBox()
         for key, label in story_ai.STYLES.items():
             self.style.addItem(label, key)
@@ -303,6 +439,9 @@ class DashboardPage(QWidget):
         self.image_style.setToolTip("What the scene images should look like. Cartoon, Anime and 3D are drawn by AI.")
         self.voice = VoicePicker()
         self.voice.setToolTip("Default uses the voice sample from Settings")
+        self.character = CharacterPicker()
+        self.character.setToolTip("Optional: one clear face photo — the same person appears in every "
+                                  "AI-generated scene. Leave off for real celebrities.")
         self.image_source = image_source_combo(settings_source_label())
         self.image_source.setToolTip("Free sources, or paid AI images from Gemini / OpenRouter. "
                                      "You can still change it per scene when reviewing.")
@@ -326,6 +465,7 @@ class DashboardPage(QWidget):
                         (_label_widget("mic", "Talking style"), self.talking),
                         (_label_widget("image", "Image style"), self.image_style),
                         (_label_widget("mic", "Voice"), self.voice),
+                        (_label_widget("wand", "Character"), self.character),
                         (_label_widget("film", "Format"), fmt_box),
                         (_label_widget("sparkles", "Image source"), self.image_source)]
         self.field_grid = QGridLayout()
@@ -352,6 +492,10 @@ class DashboardPage(QWidget):
         form.addWidget(self.script, 1)
 
         self.error = QLabel(objectName="error", wordWrap=True)
+        self.news_btn = QPushButton(" Find News", objectName="pill", toolTip=
+                                    "Search real news and pick a story — Write with AI will script it from that story.")
+        self.news_btn.setIcon(icons.icon("search", "#dbe4ff", 16))
+        self.news_btn.clicked.connect(self._pick_news)
         self.write_btn = QPushButton(" Write with AI", objectName="ai")
         self.write_btn.setIcon(icons.icon("sparkles", "#ffffff", 16))
         self.write_btn.clicked.connect(self._write)
@@ -425,13 +569,15 @@ class DashboardPage(QWidget):
         for c in range(2):
             self.field_grid.setColumnStretch(c, 1 if c < cols else 0)
         if cols == 2:
-            self.action_grid.addWidget(self.write_btn, 0, 0)
-            self.action_grid.setColumnStretch(1, 1)
-            self.action_grid.addWidget(self.next_btn, 0, 2)
-            self.action_grid.addWidget(self.create_btn, 0, 3)
+            self.action_grid.addWidget(self.news_btn, 0, 0)
+            self.action_grid.addWidget(self.write_btn, 0, 1)
+            self.action_grid.setColumnStretch(2, 1)
+            self.action_grid.addWidget(self.next_btn, 0, 3)
+            self.action_grid.addWidget(self.create_btn, 0, 4)
         else:
             self.action_grid.setColumnStretch(1, 0)
-            self.action_grid.addWidget(self.write_btn, 0, 0, 1, 2)
+            self.action_grid.addWidget(self.news_btn, 0, 0)
+            self.action_grid.addWidget(self.write_btn, 0, 1)
             self.action_grid.addWidget(self.next_btn, 1, 0)
             self.action_grid.addWidget(self.create_btn, 1, 1)
         self.banner_art.setVisible(width >= 460)
@@ -591,14 +737,31 @@ class DashboardPage(QWidget):
         button.setText(text)
         self.error.clear()
 
+    def _pick_news(self):
+        dlg = NewsPickerDialog(self, initial=self.topic.text().strip(), style_key=self.style.currentData())
+        if dlg.exec() == QDialog.Accepted and dlg.selected():
+            self._news_selected(dlg.selected())
+
+    def _news_selected(self, story: dict):
+        self._news_story = story
+        self.news_label.setText(f'<span style="color:{ACCENT_TEXT}; font-weight:600">📰 {story.get("source") or "News"}</span>'
+                                f"&nbsp;&nbsp;{story['title']}")
+        self.news_chip.show()
+        self.error.setText("")
+
+    def _clear_news(self):
+        self._news_story = None
+        self.news_chip.hide()
+
     def _write(self):
-        topic = self.topic.text().strip()
+        topic = self.topic.text().strip() or (self._news_story or {}).get("title", "")
         if not topic:
-            self.error.setText("Enter a topic first.")
+            self.error.setText("Enter a topic first, or use Find News to pick a story.")
             return
         self._busy(self.write_btn, " Writing…")
         run_async(story_ai.generate_story, settings.load(), topic, self.style.currentData(), self.aspect_ratio,
-                  self.talking.currentData(), on_done=self._written, on_error=self._write_failed)
+                  self.talking.currentData(), on_done=self._written, on_error=self._write_failed,
+                  news_story=self._news_story)
 
     def _written(self, data):
         self.write_btn.setEnabled(True)
@@ -631,6 +794,7 @@ class DashboardPage(QWidget):
                   self.style.currentData(), self.talking.currentData(), self.aspect_ratio, settings.load(), self._yt,
                   voice_sample=self.voice.value(), image_style=self.image_style.currentData(),
                   image_provider=self.image_source.currentData() or None,
+                  character_image=self.character.value(),
                   on_done=self._created, on_error=self._create_failed)
 
     def _reset_buttons(self):

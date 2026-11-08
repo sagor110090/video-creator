@@ -1,7 +1,11 @@
 """Shared building blocks for the Dark Blue pages."""
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QLineEdit, QVBoxLayout
+from pathlib import Path
 
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QPixmap
+from PySide6.QtWidgets import QFileDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout
+
+from desktop.core import characters
 from desktop.ui import icons
 from desktop.ui.style import MUTED, glow
 
@@ -96,3 +100,48 @@ def settings_source_label() -> str:
     from desktop.core import settings
     provider = settings.load().get("image_provider", "free")
     return f"Default · {dict(IMAGE_SOURCES).get(provider, 'Free sources')}"
+
+
+class CharacterPicker(QFrame):
+    """Optional per-video character: one clear face photo, kept in every AI-generated scene."""
+
+    def __init__(self):
+        super().__init__()
+        row = QHBoxLayout(self)
+        row.setContentsMargins(8, 4, 4, 4)
+        row.setSpacing(8)
+        self._path = None
+        self.thumb = QLabel(fixedSize=QSize(30, 30), alignment=Qt.AlignCenter)
+        self.thumb.setStyleSheet("border:1px solid #1a2d63; border-radius:8px; background:#0b1430;")
+        self.label = QLabel("None", objectName="cardMeta")
+        pick = QPushButton("Choose…", clicked=self._pick)
+        self.clear_btn = QPushButton("✕", flat=True, cursor=Qt.PointingHandCursor, toolTip="No character")
+        self.clear_btn.setStyleSheet("color:#8a9bc7; font-weight:700; border:none; padding:2px 6px;")
+        self.clear_btn.clicked.connect(lambda: self.setValue(""))
+        row.addWidget(self.thumb)
+        row.addWidget(self.label, 1)
+        row.addWidget(self.clear_btn)
+        row.addWidget(pick)
+
+    def value(self) -> str | None:
+        return self._path
+
+    def setValue(self, path: str):
+        self._path = path or None
+        name = Path(path).name if path else ""
+        self.label.setText(name or "None")
+        self.clear_btn.setVisible(bool(path))
+        pix = QPixmap(path) if path else QPixmap()
+        self.thumb.setPixmap(pix.scaled(28, 28, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                             if not pix.isNull() else QPixmap())
+
+    def _pick(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Character image (one clear face photo)",
+                                              str(Path.home()),
+                                              "Images (*.jpg *.jpeg *.png *.webp)")
+        if not path:
+            return
+        try:
+            self.setValue(str(characters.add_image(path)))
+        except OSError as e:                      # never die silently inside a Qt slot
+            self.label.setText(f"Couldn't load image: {e}")

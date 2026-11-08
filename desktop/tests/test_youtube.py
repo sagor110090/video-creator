@@ -116,6 +116,7 @@ def test_upload_public_now_in_chunks(Session, data_dir, monkeypatch):
     assert youtube.upload(CFG, Session, sid, progress=progress.append) == "vid123"
     meta = json.loads(responses.calls[0].request.body)
     assert meta["status"]["privacyStatus"] == "public"
+    assert meta["status"]["containsSyntheticMedia"] is True   # AI disclosure flag on every upload
     assert meta["snippet"]["tags"] == ["a", "b", "c"] and meta["snippet"]["title"] == "YT title"
     ranges = [c.request.headers["Content-Range"] for c in responses.calls[1:]]
     assert ranges == ["bytes 0-7/20", "bytes 8-15/20", "bytes 16-19/20"]
