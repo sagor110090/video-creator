@@ -3,7 +3,7 @@ import subprocess
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QSize, Qt, QTimer
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QGuiApplication, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QFrame,
                                QGridLayout, QHBoxLayout, QInputDialog, QLabel,
                                QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea,
@@ -416,13 +416,20 @@ class DashboardPage(QWidget):
             f"QFrame#newsChip QLabel {{ color: {TEXT}; border: none; background: transparent; }}"
             f"QFrame#newsChip QLabel#chipSource {{ color: {ACCENT_TEXT}; font-weight: 600; }}"
             f"QFrame#newsChip QPushButton {{ color: {MUTED}; border: none; background: transparent; font-weight: 700; }}"
-            f"QFrame#newsChip QPushButton:hover {{ color: #f87171; }}")
+            f"QFrame#newsChip QPushButton:hover {{ color: #f87171; }}"
+            f"QFrame#newsChip QPushButton:not(#chipClear) {{ padding: 2px 6px; }}")
         chip = QHBoxLayout(self.news_chip)
         chip.setContentsMargins(10, 6, 8, 6)
         self.news_label = QLabel(wordWrap=True)
+        self.news_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        self.news_label.setFocusPolicy(Qt.StrongFocus)
+        self.news_copy = QPushButton("Copy", flat=True, cursor=Qt.PointingHandCursor, objectName="chipCopy",
+                                     toolTip="Copy the headline to the clipboard")
+        self.news_copy.clicked.connect(self._copy_news_title)
         self.news_clear = QPushButton("✕", flat=True, cursor=Qt.PointingHandCursor, toolTip="Remove this news story")
         self.news_clear.clicked.connect(self._clear_news)
         chip.addWidget(self.news_label, 1)
+        chip.addWidget(self.news_copy)
         chip.addWidget(self.news_clear)
         self.news_chip.hide()
         form.addWidget(self.news_chip)
@@ -744,10 +751,17 @@ class DashboardPage(QWidget):
 
     def _news_selected(self, story: dict):
         self._news_story = story
-        self.news_label.setText(f'<span style="color:{ACCENT_TEXT}; font-weight:600">📰 {story.get("source") or "News"}</span>'
+        source = story.get("source") or "News"
+        self.news_label.setText(f'<span style="color:{ACCENT_TEXT}; font-weight:600">📰 {source}</span>'
                                 f"&nbsp;&nbsp;{story['title']}")
+        self.news_label.setToolTip(f"{source} — {story['title']}\n"
+                                   "Select the text and press ⌘C, or click Copy.")
         self.news_chip.show()
         self.error.setText("")
+
+    def _copy_news_title(self):
+        if self._news_story:
+            QGuiApplication.clipboard().setText(self._news_story["title"])
 
     def _clear_news(self):
         self._news_story = None

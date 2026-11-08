@@ -471,3 +471,17 @@ def test_schedule_add_saves_image_provider(qtbot, Session, bridge):
     sp._add()
     with Session() as s:
         assert s.query(db.Schedule).one().image_provider == "openrouter"
+
+
+def test_news_chip_title_is_selectable_and_copyable(qtbot, Session, bridge):
+    from PySide6.QtGui import QGuiApplication
+    from desktop.ui import dashboard
+    page = dashboard.DashboardPage(bridge, open_story=lambda _id: None)
+    qtbot.addWidget(page)
+    story = {"title": "Salman trailer drops tomorrow", "source": "Dainik Bhaskar",
+             "published": "Sat, 07 Nov 2026", "link": "https://x"}
+    page._news_selected(story)
+    assert page.news_label.textInteractionFlags() & Qt.TextSelectableByMouse
+    assert "Salman trailer drops tomorrow" in page.news_label.toolTip()
+    page.news_copy.click()
+    assert QGuiApplication.clipboard().text() == "Salman trailer drops tomorrow"
