@@ -30,3 +30,7 @@ __pycache__/
 # macOS app bundle build output (py2app)
 /dist/
 /build/
+desktop/packaging/bin/
+desktop/dist/
+desktop/build/
+bangla_voice_demo/

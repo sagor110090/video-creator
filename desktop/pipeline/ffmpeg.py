@@ -1,7 +1,7 @@
 """Thin ffmpeg/ffprobe wrappers that raise instead of returning False."""
-import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -10,8 +10,11 @@ class FFmpegError(RuntimeError):
 
 
 def _find(name: str) -> str:
+    bundled = Path(sys.executable).resolve().parent.parent / "Resources" / "bin" / name
+    if bundled.exists():                                 # standalone app: static ffmpeg inside the bundle
+        return str(bundled)
     return shutil.which(name) or next(
-        (p for p in (f"/opt/homebrew/bin/{name}", f"/usr/local/bin/{name}") if os.path.exists(p)), name)
+        (p for p in (f"/opt/homebrew/bin/{name}", f"/usr/local/bin/{name}") if p.exists()), name)
 
 
 FFMPEG = _find("ffmpeg")
